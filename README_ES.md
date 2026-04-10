@@ -8,7 +8,7 @@
 ![Architecture](https://img.shields.io/badge/Architecture-MVVM-orange)
 ![Database](https://img.shields.io/badge/Persistence-Room-red)
 ![Status](https://img.shields.io/badge/Status-Active%20Development-brightgreen)
-
+ 
 ---
 
 ## Descripción general
