@@ -131,6 +131,6 @@ git clone https://github.com/HerreroAndre/InitiativeTracker.git
 ## Autor
 
 **Andrés Herrero**  
-[GitHub Profile](https://github.com/HerreroAndre)
+[Perfil Github](https://github.com/HerreroAndre)
 
 Este repositorio forma parte de mi portfolio de Android/Kotlin y refleja mi camino de aprendizaje en desarrollo Android moderno.
