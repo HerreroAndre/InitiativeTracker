@@ -68,37 +68,6 @@ The project is built around a clear goal: make initiative tracking **fast, visua
 
 ---
 
-## Architecture
-
-The project follows a layered MVVM structure:
-
-```text
-UI (Compose Screens)
-↓
-ViewModel
-↓
-Repository
-↓
-Room Database / DAO
-
-Project structure
-com.dmc.initiativetracker
-├── data
-│   ├── local
-│   │   ├── dao
-│   │   ├── entity
-│   │   ├── mapper
-│   │   └── database
-├── domain
-│   └── model
-├── repository
-├── ui
-│   ├── navigation
-│   ├── screen
-│   └── theme
-├── viewmodel
-└── di
-```
 ## Concepts Applied
 
 This project was built to practice and apply modern Android development concepts, with a strong focus on clean structure, maintainability, and reactive UI patterns.
