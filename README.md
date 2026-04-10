@@ -98,46 +98,70 @@ com.dmc.initiativetracker
 │   └── theme
 ├── viewmodel
 └── di
-Concepts Applied
+```
+## Concepts Applied
 
-This project was built to practice and apply modern Android development concepts:
+This project was built to practice and apply modern Android development concepts, with a strong focus on clean structure, maintainability, and reactive UI patterns.
 
-MVVM architecture
-Repository pattern
-Local persistence with Room
-Entity-to-domain model mapping
-Reactive UI with Flow / StateFlow
-Unidirectional state handling
-Compose navigation
-UI state modeling
-Separation of concerns
-Scalable folder organization
-Technical Decisions
+- **MVVM architecture**
+- **Repository pattern**
+- **Local persistence with Room**
+- **Entity-to-domain model mapping**
+- **Reactive UI with Flow / StateFlow**
+- **Unidirectional state handling**
+- **Compose navigation**
+- **UI state modeling**
+- **Separation of concerns**
+- **Scalable folder organization**
 
-Some important design decisions in this project:
+---
 
-Initiative order remains fixed during combat
-Turn tracking is based on currentCharacterId, not only list index
-Only active characters participate in the combat loop
-If the current character becomes inactive, the app does not auto-skip
-Ending combat resets combat state instead of resuming later
-HP is optional and can be displayed as ?
-Data is stored locally only, without a backend
-Design Priorities
-Fast interaction during real play
-Clear visual recognition of each character
-Low-friction combat flow
-Offline/local usability
-Simple and maintainable architecture
-Installation
-Clone the repository
-Open it in Android Studio
-Sync Gradle
-Run on an emulator or Android device
+## Technical Decisions
+
+The project includes several intentional design decisions to keep combat flow stable, simple, and practical during play:
+
+- Initiative order remains **fixed during combat**
+- Turn tracking is based on **`currentCharacterId`**, not only list index
+- Only **active** characters participate in the combat loop
+- If the current character becomes inactive, the app **does not auto-skip**
+- Ending combat **resets combat state** instead of resuming later
+- HP is optional and can be displayed as **`?`**
+- Data is stored **locally only**, without a backend
+
+---
+
+## Design Priorities
+
+The app was planned around a few core product and UX priorities:
+
+- **Fast interaction** during real play
+- **Clear visual recognition** of each character
+- **Low-friction combat flow**
+- **Offline/local usability**
+- **Simple and maintainable architecture**
+
+---
+
+## Installation
+
+To run the project locally:
+
+1. Clone the repository
+2. Open it in Android Studio
+3. Sync Gradle
+4. Run it on an emulator or Android device
+
+```bash
 git clone https://github.com/HerreroAndre/InitiativeTracker.git
-Author
 
-Andrés Herrero
-GitHub: HerreroAndre
+```
 
-This repository is part of my Android/Kotlin portfolio and learning path as a mobile developer.
+---
+
+## Author
+
+**Andrés Herrero**  
+[GitHub Profile](https://github.com/HerreroAndre)
+
+This repository is part of my Android/Kotlin portfolio and reflects my learning path in modern Android development.
+
