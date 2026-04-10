@@ -1,5 +1,7 @@
 # InitiativeTracker
 
+**Language / Idioma:** [English](README.md) · [Español](README_ES.md)
+
 > Android app for tracking combat initiative in tabletop RPGs, focused on **fast turn management**, **visual character identification**, and **local persistence**.
 
 ![Platform](https://img.shields.io/badge/Platform-Android-green)
