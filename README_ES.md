@@ -1,5 +1,7 @@
 # InitiativeTracker
 
+**Language / Idioma:** [English](README.md) · [Español](README_ES.md)
+
 > Aplicación Android para gestionar la iniciativa en combates de juegos de rol de mesa, enfocada en **manejo rápido de turnos**, **identificación visual de personajes** y **persistencia local**.
 
 ![Platform](https://img.shields.io/badge/Platform-Android-green)
