@@ -1,25 +1,30 @@
 package com.dmc.initiativetracker.ui.screen.combat
 
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import android.widget.Toast
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Person
@@ -28,16 +33,22 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -48,9 +59,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -87,14 +101,16 @@ fun CombatScreen(
 
     val current = state.current
 
-    val currentStatuses = current
-        ?.let { currentCharacter -> state.statuses.filter { it.characterId == currentCharacter.id } }
-        .orEmpty()
+    val statusesByCharacter = remember(state.statuses) {
+        state.statuses.groupBy { it.characterId }
+    }
+    val currentStatuses = current?.let { statusesByCharacter[it.id].orEmpty() }.orEmpty()
 
     val selectedSheetCharacter = state.ordered.firstOrNull { it.id == selectedSheetCharacterId }
 
+
     val selectedSheetStatuses = selectedSheetCharacter
-        ?.let { selected -> state.statuses.filter { it.characterId == selected.id } }
+        ?.let { selected -> statusesByCharacter[selected.id].orEmpty() }
         .orEmpty()
 
     val targetCharacter = selectedSheetCharacter ?: current
@@ -110,6 +126,7 @@ fun CombatScreen(
             SheetContent(
                 ordered = state.ordered,
                 statuses = state.statuses,
+                currentCharacterId = state.current?.id,
                 onToggleActive = { vm.toggleActive(it) },
                 onPreview = { uri -> vm.openPreview(uri) },
                 onOpenActions = { character ->
@@ -229,34 +246,27 @@ fun CombatScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Ronda ${state.roundCounter}") },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            vm.endCombat()
-                            onExit()
-                        }
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Terminar combate")
-                    }
+            CombatTopBar(
+                roundCounter = state.roundCounter,
+                onEndCombat = {
+                    vm.endCombat()
+                    onExit()
                 }
             )
         },
         bottomBar = {
-            BottomAppBar {
-                TextButton(onClick = { vm.prev() }) { Text("◀") }
-                TextButton(onClick = { vm.openSheet() }) { Text("📋") }
-                Spacer(Modifier.weight(1f))
-                Button(onClick = { vm.next() }) { Text("▶") }
-            }
+            CombatBottomBar(
+                onPrev = { vm.prev() },
+                onOpenSheet = { vm.openSheet() },
+                onNext = { vm.next() }
+            )
         }
     ) { padding ->
         CombatBody(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             current = current,
             currentStatuses = currentStatuses,
             onOpenPreview = { vm.openPreview(current?.imageUri) },
@@ -287,6 +297,51 @@ fun CombatScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CombatTopBar(
+    roundCounter: Int,
+    onEndCombat: () -> Unit
+) {
+    TopAppBar(
+        title = {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Combate",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer
+                ) {
+                    Text(
+                        text = "Ronda $roundCounter",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+        },
+        actions = {
+            FilledTonalIconButton(onClick = onEndCombat) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Terminar combate"
+                )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    )
+}
+
 @Composable
 private fun CombatBody(
     modifier: Modifier = Modifier,
@@ -303,72 +358,28 @@ private fun CombatBody(
 ) {
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        val context = LocalContext.current
-        val fallbackPainter = rememberVectorPainter(Icons.Default.Person)
-
-        ElevatedCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(280.dp)
-                .clickable { onOpenPreview() },
-            shape = RoundedCornerShape(18.dp)
-        ) {
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(current?.imageUri)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                placeholder = fallbackPainter,
-                error = fallbackPainter,
-                fallback = fallbackPainter
-            )
-        }
-
         if (current == null) {
-            Text("No hay personaje actual", style = MaterialTheme.typography.titleMedium)
-            Text("Activá al menos uno en la lista 📋", style = MaterialTheme.typography.bodyMedium)
+            EmptyCombatState()
             return
         }
 
-        Text(
-            text = "${current.playerName} • ${current.characterName}",
-            style = MaterialTheme.typography.headlineSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+        CharacterHeroCard(
+            character = current,
+            onOpenPreview = onOpenPreview
         )
 
-        Text(
-            text = buildHpLine(current),
-            style = MaterialTheme.typography.titleMedium
+        CharacterSummaryCard(
+            character = current
         )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-        ) {
-            AssistChip(
-                onClick = onEditHp,
-                label = { Text("HP") }
-            )
-            AssistChip(
-                onClick = onEditTempHp,
-                label = { Text("Temp") }
-            )
-            AssistChip(
-                onClick = onApplyDamage,
-                label = { Text("Daño") }
-            )
-            AssistChip(
-                onClick = onAddStatus,
-                label = { Text("+Estado") }
-            )
-        }
+        QuickActionsCard(
+            onEditHp = onEditHp,
+            onEditTempHp = onEditTempHp,
+            onApplyDamage = onApplyDamage,
+            onAddStatus = onAddStatus
+        )
 
         if (current.type == CharacterType.PLAYER && current.currentHp == 0) {
             DeathSavesCard(
@@ -379,39 +390,380 @@ private fun CombatBody(
             )
         }
 
-        if (currentStatuses.isNotEmpty()) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+        StatusSection(
+            statuses = currentStatuses,
+            onRemoveStatus = onRemoveStatus
+        )
+
+        Spacer(Modifier.height(4.dp))
+    }
+}
+
+@Composable
+private fun EmptyCombatState() {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer
             ) {
-                Text(
-                    text = "Estados",
-                    style = MaterialTheme.typography.titleMedium
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = null,
+                    modifier = Modifier.padding(18.dp),
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+
+            Text(
+                text = "No hay personaje actual",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Text(
+                text = "Activá al menos un personaje desde la lista del combate.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Text(
+                text = "Usá el botón Lista para revisar quiénes están activos.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun CharacterHeroCard(
+    character: Character,
+    onOpenPreview: () -> Unit
+) {
+    val context = LocalContext.current
+    val fallbackPainter = rememberVectorPainter(Icons.Default.Person)
+
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(320.dp)
+            .clickable { onOpenPreview() },
+        shape = RoundedCornerShape(28.dp)
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(character.imageUri)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                placeholder = fallbackPainter,
+                error = fallbackPainter,
+                fallback = fallbackPainter
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomStart)
+                    .background(Color.Black.copy(alpha = 0.30f))
+                    .padding(16.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f)
+                    ) {
+                        Text(
+                            text = currentRoleLabel(character),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+
+                    Text(
+                        text = character.characterName.ifBlank { "Sin nombre" },
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Text(
+                        text = character.playerName.ifBlank { "Sin jugador" },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White.copy(alpha = 0.92f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CharacterSummaryCard(
+    character: Character
+) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Resumen",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                InfoPill(
+                    label = buildHpChipLabel(character),
+                    highlighted = true
                 )
 
-                currentStatuses.forEach { status ->
-                    ElevatedCard(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = formatStatus(status),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = statusColor(status),
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            TextButton(onClick = { onRemoveStatus(status.id) }) {
-                                Text("✕")
-                            }
-                        }
-                    }
+                if (character.tempHp > 0) {
+                    InfoPill(
+                        label = "Temp: ${character.tempHp}"
+                    )
                 }
+
+                if (!character.isActive || character.isDead) {
+                    InfoPill(
+                        label = if (character.isDead) "Muerto" else "Inactivo",
+                        danger = character.isDead
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoPill(
+    label: String,
+    highlighted: Boolean = false,
+    danger: Boolean = false
+) {
+    val background = when {
+        danger -> MaterialTheme.colorScheme.errorContainer
+        highlighted -> MaterialTheme.colorScheme.primaryContainer
+        else -> MaterialTheme.colorScheme.secondaryContainer
+    }
+
+    val content = when {
+        danger -> MaterialTheme.colorScheme.onErrorContainer
+        highlighted -> MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.onSecondaryContainer
+    }
+
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = background
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = content
+        )
+    }
+}
+
+@Composable
+private fun QuickActionsCard(
+    onEditHp: () -> Unit,
+    onEditTempHp: () -> Unit,
+    onApplyDamage: () -> Unit,
+    onAddStatus: () -> Unit
+) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Acciones rápidas",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                FilledTonalButton(
+                    onClick = onEditHp,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("HP")
+                }
+
+                FilledTonalButton(
+                    onClick = onEditTempHp,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Temp")
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onApplyDamage,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Daño")
+                }
+
+                OutlinedButton(
+                    onClick = onAddStatus,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("+ Estado")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusSection(
+    statuses: List<Status>,
+    onRemoveStatus: (Long) -> Unit
+) {
+    if (statuses.isEmpty()) return
+
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Estados",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                statuses.forEach { status ->
+                    StatusChip(
+                        status = status,
+                        onRemove = { onRemoveStatus(status.id) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusChip(
+    status: Status,
+    onRemove: () -> Unit
+) {
+    val container = statusContainerColor(status)
+    val content = statusContentColor(status)
+
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = container
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = formatStatus(status),
+                style = MaterialTheme.typography.labelLarge,
+                color = content,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            TextButton(
+                onClick = onRemove,
+                modifier = Modifier.height(28.dp)
+            ) {
+                Text(
+                    text = "✕",
+                    color = content
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CombatBottomBar(
+    onPrev: () -> Unit,
+    onOpenSheet: () -> Unit,
+    onNext: () -> Unit
+) {
+    BottomAppBar(
+        windowInsets = WindowInsets.navigationBars
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedButton(
+                onClick = onPrev,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Anterior")
+            }
+
+            FilledTonalButton(
+                onClick = onOpenSheet,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Lista")
+            }
+
+            Button(
+                onClick = onNext,
+                modifier = Modifier.weight(1.2f)
+            ) {
+                Text("Siguiente")
             }
         }
     }
@@ -421,62 +773,93 @@ private fun CombatBody(
 private fun SheetContent(
     ordered: List<Character>,
     statuses: List<Status>,
+    currentCharacterId: Long?,
     onToggleActive: (Character) -> Unit,
     onPreview: (String?) -> Unit,
     onOpenActions: (Character) -> Unit,
     onClose: () -> Unit
 ) {
     Column(
-        Modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Lista", style = MaterialTheme.typography.titleLarge)
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Lista de combate",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = onClose) { Text("Cerrar") }
+            TextButton(onClick = onClose) {
+                Text("Cerrar")
+            }
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
 
         if (ordered.isEmpty()) {
-            Text("No hay personajes.")
+            Text(
+                text = "No hay personajes.",
+                style = MaterialTheme.typography.bodyMedium
+            )
             Spacer(Modifier.height(24.dp))
             return
         }
 
-        ordered.forEach { c ->
-            val characterStatuses = statuses.filter { it.characterId == c.id }
+        val statusesByCharacter = statuses.groupBy { it.characterId }
+        ordered.forEachIndexed { index, character ->
+            val characterStatuses = statusesByCharacter[character.id].orEmpty()
 
             SheetRow(
-                character = c,
+                character = character,
                 statuses = characterStatuses,
-                onToggleActive = { onToggleActive(c) },
-                onPreview = { onPreview(c.imageUri) },
-                onOpenActions = { onOpenActions(c) }
+                isCurrent = character.id == currentCharacterId,
+                onToggleActive = { onToggleActive(character) },
+                onPreview = { onPreview(character.imageUri) },
+                onOpenActions = { onOpenActions(character) }
             )
-            Spacer(Modifier.height(8.dp))
+
+            if (index != ordered.lastIndex) {
+                Spacer(Modifier.height(8.dp))
+            }
         }
 
         Spacer(Modifier.height(24.dp))
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SheetRow(
     character: Character,
     statuses: List<Status>,
+    isCurrent: Boolean,
     onToggleActive: () -> Unit,
     onPreview: () -> Unit,
     onOpenActions: () -> Unit
 ) {
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+    val cardShape = RoundedCornerShape(20.dp)
+    val containerColor = if (isCurrent) {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.50f)
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = cardShape,
+        color = containerColor,
+        tonalElevation = if (isCurrent) 3.dp else 1.dp
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .combinedClickable(
-                    onClick = { onPreview() },
-                    onLongClick = { onOpenActions() }
+                    onClick = onPreview,
+                    onLongClick = onOpenActions
                 )
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -490,21 +873,54 @@ private fun SheetRow(
                     .crossfade(true)
                     .build(),
                 contentDescription = null,
-                modifier = Modifier.size(36.dp),
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(14.dp)),
                 contentScale = ContentScale.Crop,
                 placeholder = fallbackPainter,
                 error = fallbackPainter,
                 fallback = fallbackPainter
             )
 
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(12.dp))
 
-            Column(Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = character.characterName.ifBlank { "Sin nombre" },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    if (isCurrent) {
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        ) {
+                            Text(
+                                text = "Turno actual",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
+                }
+
                 Text(
-                    text = "${character.playerName} • ${character.characterName}",
+                    text = character.playerName.ifBlank { "Sin jugador" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleMedium
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 Text(
@@ -514,19 +930,19 @@ private fun SheetRow(
 
                 if (statuses.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        statuses.take(3).forEach { status ->
+                        statuses.take(2).forEach { status ->
                             Text(
-                                text = formatStatusCompact(status),
+                                text = formatStatus(status),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = statusColor(status),
+                                color = statusContainerColor(status),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
 
-                        if (statuses.size > 3) {
+                        if (statuses.size > 2) {
                             Text(
-                                text = "+${statuses.size - 3} más",
+                                text = "+${statuses.size - 2} más",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -536,6 +952,7 @@ private fun SheetRow(
             }
 
             val label = if (character.isActive && !character.isDead) "Activo" else "Inactivo"
+
             AssistChip(
                 onClick = onToggleActive,
                 label = { Text(label) }
@@ -552,45 +969,43 @@ private fun PreviewOverlay(
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .height(420.dp),
-        shape = RoundedCornerShape(18.dp)
+            .height(460.dp),
+        shape = RoundedCornerShape(28.dp)
     ) {
         Box(Modifier.fillMaxSize()) {
             val context = LocalContext.current
             val fallbackPainter = rememberVectorPainter(Icons.Default.Person)
 
-            Box(
-                Modifier
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(uri)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                modifier = Modifier
                     .fillMaxSize()
-                    .padding(8.dp)
-            ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(uri)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit,
-                    placeholder = fallbackPainter,
-                    error = fallbackPainter,
-                    fallback = fallbackPainter
-                )
+                    .padding(10.dp),
+                contentScale = ContentScale.Fit,
+                placeholder = fallbackPainter,
+                error = fallbackPainter,
+                fallback = fallbackPainter
+            )
 
-                if (uri == null) {
-                    Text(
-                        text = "Sin imagen",
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(16.dp),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
+            if (uri == null) {
+                Text(
+                    text = "Sin imagen",
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
 
-            IconButton(
+            FilledTonalIconButton(
                 onClick = onClose,
-                modifier = Modifier.align(Alignment.TopEnd)
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(10.dp)
             ) {
                 Icon(Icons.Default.Close, contentDescription = "Cerrar")
             }
@@ -605,63 +1020,88 @@ private fun DeathSavesCard(
     onAddSuccess: () -> Unit,
     onAddFailure: () -> Unit
 ) {
+    val locked = successes >= 3 || failures >= 3
+
     ElevatedCard(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
                 text = "Tiradas de salvación contra muerte",
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
             )
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Éxitos", style = MaterialTheme.typography.bodyMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    repeat(3) { index ->
-                        DeathSaveDot(filled = index < successes)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Éxitos", style = MaterialTheme.typography.bodyMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        repeat(3) { index ->
+                            DeathSaveDot(filled = index < successes)
+                        }
                     }
                 }
 
-                Text("Fallos", style = MaterialTheme.typography.bodyMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    repeat(3) { index ->
-                        DeathSaveDot(filled = index < failures, isFailure = true)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Fallos", style = MaterialTheme.typography.bodyMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        repeat(3) { index ->
+                            DeathSaveDot(filled = index < failures, isFailure = true)
+                        }
                     }
                 }
             }
 
-            val locked = successes >= 3 || failures >= 3
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AssistChip(
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                FilledTonalButton(
                     onClick = onAddSuccess,
                     enabled = !locked,
-                    label = { Text("+ Éxito") }
-                )
-                AssistChip(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("+ Éxito")
+                }
+
+                OutlinedButton(
                     onClick = onAddFailure,
                     enabled = !locked,
-                    label = { Text("+ Fallo") }
-                )
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("+ Fallo")
+                }
             }
 
-            if (successes >= 3) {
-                Text(
-                    text = "Estable",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
+            when {
+                successes >= 3 -> {
+                    Text(
+                        text = "Estable",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
 
-            if (failures >= 3) {
-                Text(
-                    text = "Muerto",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error
-                )
+                failures >= 3 -> {
+                    Text(
+                        text = "Muerto",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }
@@ -683,7 +1123,7 @@ private fun DeathSaveDot(
             .size(18.dp)
             .background(
                 color = color,
-                shape = RoundedCornerShape(50)
+                shape = CircleShape
             )
     )
 }
@@ -883,10 +1323,20 @@ private fun SheetCharacterActionsDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("${character.playerName} • ${character.characterName}")
+            Text(
+                text = character.characterName.ifBlank { "Sin nombre" },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = character.playerName.ifBlank { "Sin jugador" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
                 Text(buildHpLine(character))
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -912,23 +1362,27 @@ private fun SheetCharacterActionsDialog(
                 }
 
                 if (statuses.isNotEmpty()) {
+                    HorizontalDivider()
+
                     Text(
                         text = "Estados",
                         style = MaterialTheme.typography.titleSmall
                     )
 
-                    statuses.forEach { status ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = formatStatus(status),
-                                color = statusColor(status),
-                                modifier = Modifier.weight(1f)
-                            )
-                            TextButton(onClick = { onRemoveStatus(status.id) }) {
-                                Text("✕")
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        statuses.forEach { status ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = formatStatus(status),
+                                    color = statusTextColor(status),
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TextButton(onClick = { onRemoveStatus(status.id) }) {
+                                    Text("Quitar")
+                                }
                             }
                         }
                     }
@@ -943,6 +1397,15 @@ private fun SheetCharacterActionsDialog(
     )
 }
 
+private fun currentRoleLabel(character: Character): String {
+    return when {
+        character.isDead -> "Muerto"
+        !character.isActive -> "Inactivo"
+        character.type == CharacterType.PLAYER -> "Jugador"
+        else -> "NPC"
+    }
+}
+
 private fun buildHpLine(character: Character): String {
     val current = character.currentHp?.toString() ?: "?"
     val max = character.maxHp?.toString() ?: "?"
@@ -950,35 +1413,36 @@ private fun buildHpLine(character: Character): String {
     return "HP: $current/$max$tempSuffix"
 }
 
+private fun buildHpChipLabel(character: Character): String {
+    val current = character.currentHp?.toString() ?: "?"
+    val max = character.maxHp?.toString() ?: "?"
+    return "HP: $current/$max"
+}
+
+private fun statusContainerColor(status: Status): Color {
+    return when {
+        status.concentrationGroupId != null -> Color(0xFF54606E)
+        status.type == StatusType.POSITIVE -> Color(0xFF2F6E4F)
+        status.type == StatusType.NEGATIVE -> Color(0xFF7A3E3E)
+        else -> Color(0xFF4E5D73)
+    }
+}
+
 @Composable
-private fun statusColor(status: Status) = when {
-    status.concentrationGroupId != null -> MaterialTheme.colorScheme.onSurface
-    status.type == StatusType.POSITIVE -> MaterialTheme.colorScheme.primary
-    status.type == StatusType.NEGATIVE -> MaterialTheme.colorScheme.error
-    else -> MaterialTheme.colorScheme.onSurfaceVariant
+private fun statusTextColor(status: Status): Color {
+    return when {
+        status.concentrationGroupId != null -> MaterialTheme.colorScheme.tertiary
+        status.type == StatusType.POSITIVE -> Color(0xFF2F6E4F)
+        status.type == StatusType.NEGATIVE -> Color(0xFFB24A4A)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+}
+
+private fun statusContentColor(status: Status): Color {
+    return Color.White
 }
 
 private fun formatStatus(status: Status): String {
-    val prefix = when (status.type) {
-        StatusType.POSITIVE -> "+"
-        StatusType.NEGATIVE -> "-"
-        StatusType.NEUTRAL -> ""
-    }
-
-    val base = if (prefix.isBlank()) {
-        "${status.name} (${status.durationRounds})"
-    } else {
-        "$prefix ${status.name} (${status.durationRounds})"
-    }
-
-    return if (status.concentrationGroupId != null) {
-        "$base • Conc."
-    } else {
-        base
-    }
-}
-
-private fun formatStatusCompact(status: Status): String {
     val prefix = when (status.type) {
         StatusType.POSITIVE -> "+"
         StatusType.NEGATIVE -> "-"

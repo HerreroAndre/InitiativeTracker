@@ -2,32 +2,41 @@ package com.dmc.initiativetracker.ui.screen.home
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dmc.initiativetracker.di.AppModule
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
+import com.dmc.initiativetracker.R
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onCreateRound: (Long) -> Unit,
@@ -36,8 +45,8 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
 
-    val vm: HomeViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+    val factory = remember(context) {
+        object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
                 return HomeViewModel(
@@ -45,8 +54,9 @@ fun HomeScreen(
                 ) as T
             }
         }
-    )
+    }
 
+    val vm: HomeViewModel = viewModel(factory = factory)
     val state by vm.uiState.collectAsState()
 
     LaunchedEffect(state.toast) {
@@ -90,36 +100,83 @@ fun HomeScreen(
         )
     }
 
-    Scaffold(
-        topBar = { TopAppBar(title = { Text("Iniciativa") }) }
-    ) { padding ->
-        Column(
+    Scaffold{ padding ->
+        Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(horizontal = 24.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Button(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = vm::openCreateDialog
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .fillMaxWidth(0.9f),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("Crear ronda")
-            }
+                Spacer(Modifier.weight(0.22f))
 
-            OutlinedButton(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onLoadRound
-            ) {
-                Text("Cargar ronda")
-            }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "Initiative Tracker",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Gestor de rondas",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
-            OutlinedButton(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onSettings
-            ) {
-                Text("Ajustes")
+                Spacer(Modifier.height(90.dp))
+
+                Image(
+                    painter = painterResource(id = R.drawable.placeholder_logo),
+                    contentDescription = "Logo de Initiative Tracker",
+                    modifier = Modifier.size(160.dp),
+                    contentScale = ContentScale.Fit
+                )
+
+                Spacer(Modifier.weight(0.16f))
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    FilledTonalButton(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        onClick = vm::openCreateDialog
+                    ) {
+                        Text("Crear ronda")
+                    }
+
+                    FilledTonalButton(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        onClick = onLoadRound
+                    ) {
+                        Text("Cargar ronda")
+                    }
+
+                    FilledTonalButton(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        onClick = onSettings
+                    ) {
+                        Text("Ajustes")
+                    }
+                }
+
+                Spacer(Modifier.weight(0.28f))
             }
         }
     }

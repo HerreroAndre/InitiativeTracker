@@ -1,50 +1,95 @@
 package com.dmc.initiativetracker.ui.screen.round_prep
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import com.dmc.initiativetracker.domain.model.Character
-import com.dmc.initiativetracker.domain.model.CharacterType
-import com.dmc.initiativetracker.viewmodel.RoundPrepUiState
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import kotlinx.coroutines.launch
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.foundation.text.KeyboardActions
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import androidx.compose.ui.layout.ContentScale
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import android.Manifest
+import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.saveable.rememberSaveable
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.core.content.ContextCompat
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Sort
-import android.widget.Toast
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.dmc.initiativetracker.domain.model.Character
+import com.dmc.initiativetracker.domain.model.CharacterType
 import com.dmc.initiativetracker.domain.model.Status
 import com.dmc.initiativetracker.domain.model.StatusType
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.runtime.rememberCoroutineScope
+import com.dmc.initiativetracker.viewmodel.RoundPrepUiState
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,7 +100,6 @@ fun RoundPrepScreen(
 ) {
     val state by vm.uiState.collectAsState()
     val focusManager = LocalFocusManager.current
-
     val context = LocalContext.current
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -77,7 +121,6 @@ fun RoundPrepScreen(
     val canRename = renameText.trim().isNotBlank() && !state.isSaving
     var selectedStatusCharacterId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showAddStatusDialog by rememberSaveable { mutableStateOf(false) }
-
 
     if (renameOpen) {
         AlertDialog(
@@ -111,13 +154,17 @@ fun RoundPrepScreen(
                         vm.renameRound(renameText)
                         renameOpen = false
                     }
-                ) { Text("Guardar") }
+                ) {
+                    Text("Guardar")
+                }
             },
             dismissButton = {
                 TextButton(
                     enabled = !state.isSaving,
                     onClick = { renameOpen = false }
-                ) { Text("Cancelar") }
+                ) {
+                    Text("Cancelar")
+                }
             }
         )
     }
@@ -140,6 +187,7 @@ fun RoundPrepScreen(
             }
         )
     }
+
     state.confirmRemoveStatusId?.let { statusId ->
         val statusToRemove = state.statuses.firstOrNull { it.id == statusId }
 
@@ -173,11 +221,30 @@ fun RoundPrepScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(state.roundName.ifBlank { "Ronda" }) },
+                title = {
+                    Column {
+                        Text(
+                            text = state.roundName.ifBlank { "Ronda" },
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = if (state.isEditing) "Modo edición" else "Preparar ronda",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
                 navigationIcon = {
-                    IconButton(onClick = {
-                        if (!state.isSaving) onBack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                    IconButton(
+                        onClick = { if (!state.isSaving) onBack() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Volver"
+                        )
                     }
                 },
                 actions = {
@@ -204,7 +271,9 @@ fun RoundPrepScreen(
 
                                         scope.launch {
                                             listState.scrollToItem(
-                                                index = currentIndex.coerceAtMost((state.shownCharacters.size - 1).coerceAtLeast(0)),
+                                                index = currentIndex.coerceAtMost(
+                                                    (state.shownCharacters.size - 1).coerceAtLeast(0)
+                                                ),
                                                 scrollOffset = currentOffset
                                             )
                                         }
@@ -233,7 +302,6 @@ fun RoundPrepScreen(
                     }
                 }
             )
-
         },
         bottomBar = {
             RoundPrepBottomBar(
@@ -267,13 +335,16 @@ fun RoundPrepScreen(
 private fun RoundPrepContent(
     modifier: Modifier = Modifier,
     state: RoundPrepUiState,
-    listState: androidx.compose.foundation.lazy.LazyListState,
+    listState: LazyListState,
     onUpdateDraft: (Character) -> Unit,
     onDeleteDraft: (Long) -> Unit,
     onAddStatus: (Long) -> Unit,
     onRemoveStatus: (Long) -> Unit
 ) {
-    val list: List<Character> = state.shownCharacters
+    val list = state.shownCharacters
+    val statusesByCharacter = remember(state.statuses) {
+        state.statuses.groupBy { it.characterId }
+    }
 
     Box(modifier) {
         when {
@@ -284,7 +355,11 @@ private fun RoundPrepContent(
             list.isEmpty() -> {
                 EmptyCentered(
                     title = "No hay personajes",
-                    subtitle = if (state.isEditing) "Agregá personajes con ➕" else "Entrá a editar para agregarlos"
+                    subtitle = if (state.isEditing) {
+                        "Agregá personajes con el botón de abajo"
+                    } else {
+                        "Entrá en edición para cargar integrantes"
+                    }
                 )
             }
 
@@ -293,19 +368,19 @@ private fun RoundPrepContent(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(
-                        items = list, // ya viene ordenada en VM
+                        items = list,
                         key = { it.id }
-                    ) { c ->
+                    ) { character ->
                         CharacterCard(
-                            character = c,
-                            statuses = state.statuses.filter { it.characterId == c.id },
+                            character = character,
+                            statuses = statusesByCharacter[character.id].orEmpty(),
                             isEditing = state.isEditing,
                             onUpdate = onUpdateDraft,
-                            onDelete = { onDeleteDraft(c.id) },
-                            onAddStatus = { onAddStatus(c.id) },
+                            onDelete = { onDeleteDraft(character.id) },
+                            onAddStatus = { onAddStatus(character.id) },
                             onRemoveStatus = onRemoveStatus
                         )
                     }
@@ -329,276 +404,326 @@ private fun CharacterCard(
     onAddStatus: () -> Unit,
     onRemoveStatus: (Long) -> Unit
 ) {
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(12.dp)) {
-            val focusManager = LocalFocusManager.current
-            val playerFR = remember { FocusRequester() }
-            val nameFR = remember { FocusRequester() }
-            val initFR = remember { FocusRequester() }
-            val currentHpFR = remember { FocusRequester() }
-            val maxHpFR = remember { FocusRequester() }
-            val tempHpFR = remember { FocusRequester() }
-
-            // Header: thumbnail placeholder + nombre (o campos)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val context = LocalContext.current
-                val fallbackPainter = rememberVectorPainter(Icons.Default.Person)
-
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(character.imageUri)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    contentScale = ContentScale.Crop,
-                    placeholder = fallbackPainter,
-                    error = fallbackPainter,
-                    fallback = fallbackPainter
-                )
-
-                Spacer(Modifier.width(12.dp))
-
-                Column(Modifier.weight(1f)) {
-                    if (!isEditing) {
-                        Text(
-                            text = "${character.playerName} • ${character.characterName}",
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text("Init: ${character.initiative}")
-                            Text(
-                                "HP: ${(character.currentHp?.toString() ?: "?")}/${character.maxHp?.toString() ?: "?"}"
-                            )
-                            if (character.tempHp > 0) {
-                                Text("Temp: ${character.tempHp}")
-                            }
-                        }
-                    } else {
-                        OutlinedTextField(
-                            value = character.playerName,
-                            onValueChange = { onUpdate(character.copy(playerName = it)) },
-                            label = { Text("Jugador") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth().focusRequester(playerFR),
-                            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Next),
-                            keyboardActions = KeyboardActions(onNext = { nameFR.requestFocus() })
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = character.characterName,
-                            onValueChange = { onUpdate(character.copy(characterName = it)) },
-                            label = { Text("Personaje") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth().focusRequester(nameFR),
-                            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Next),
-                            keyboardActions = KeyboardActions(onNext = { initFR.requestFocus() })
-                        )
-                    }
-                }
-
-                if (isEditing) {
-                    Spacer(Modifier.width(8.dp))
-                    IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = "Eliminar")
-                    }
-                }
-            }
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            CharacterCardHeader(
+                character = character,
+                isEditing = isEditing,
+                onUpdate = onUpdate,
+                onDelete = onDelete
+            )
 
             if (isEditing) {
-                Spacer(Modifier.height(12.dp))
+                CharacterEditSection(
+                    character = character,
+                    onUpdate = onUpdate
+                )
+            } else {
+                CharacterInfoSection(character = character)
+            }
 
-                // Initiative + HP (numéricos)
-                var initText by remember(character.id) { mutableStateOf(character.initiative.toString()) }
-                var currentHpText by remember(character.id) { mutableStateOf(character.currentHp?.toString() ?: "") }
-                var maxHpText by remember(character.id) { mutableStateOf(character.maxHp?.toString() ?: "") }
-                var tempHpText by remember(character.id) { mutableStateOf(character.tempHp.toString()) }
+            HorizontalDivider()
 
-                // Iniciativa + HP
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+            CharacterStatusSection(
+                statuses = statuses,
+                isEditing = isEditing,
+                onAddStatus = onAddStatus,
+                onRemoveStatus = onRemoveStatus
+            )
+        }
+    }
+}
+
+@Composable
+private fun CharacterCardHeader(
+    character: Character,
+    isEditing: Boolean,
+    onUpdate: (Character) -> Unit,
+    onDelete: () -> Unit
+) {
+    val context = LocalContext.current
+    val fallbackPainter = rememberVectorPainter(Icons.Default.Person)
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AsyncImage(
+            model = ImageRequest.Builder(context)
+                .data(character.imageUri)
+                .crossfade(true)
+                .build(),
+            contentDescription = null,
+            modifier = Modifier
+                .size(60.dp)
+                .clip(RoundedCornerShape(16.dp)),
+            contentScale = ContentScale.Crop,
+            placeholder = fallbackPainter,
+            error = fallbackPainter,
+            fallback = fallbackPainter
+        )
+
+        Spacer(Modifier.width(12.dp))
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            if (!isEditing) {
+                Text(
+                    text = character.characterName.ifBlank { "Sin nombre" },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Text(
+                    text = character.playerName.ifBlank { "Sin jugador" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedTextField(
-                        value = initText,
-                        onValueChange = { txt: String ->
-                            if (txt.isBlank() || txt.all { ch: Char -> ch.isDigit() }) {
-                                initText = txt
-                                txt.toIntOrNull()?.let { onUpdate(character.copy(initiative = it)) }
-                            }
-                        },
-                        label = { Text("Iniciativa") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f).focusRequester(initFR),
-                        keyboardOptions = KeyboardOptions.Default.copy(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Next
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onNext = {
-                                initText.toIntOrNull()?.let { onUpdate(character.copy(initiative = it)) }
-                                currentHpFR.requestFocus()
-                            }
-                        )
+                    InfoBadge(label = "Init ${character.initiative}", highlighted = true)
+
+                    InfoBadge(
+                        label = if (character.type == CharacterType.PLAYER) "PLAYER" else "NPC"
                     )
 
-                    OutlinedTextField(
-                        value = currentHpText,
-                        onValueChange = { txt ->
-                            if (txt.isBlank() || txt.all { it.isDigit() }) {
-                                currentHpText = txt
-                                val currentHp = txt.toIntOrNull()
-                                onUpdate(character.copy(currentHp = currentHp))
-                            }
-                        },
-                        label = { Text("HP actual") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f).focusRequester(currentHpFR),
-                        keyboardOptions = KeyboardOptions.Default.copy(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Next
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onNext = {
-                                maxHpFR.requestFocus()
-                            }
-                        )
-                    )
+                    if (!character.isActive) {
+                        InfoBadge(label = "Inactivo")
+                    }
+
+                    if (character.isDead) {
+                        InfoBadge(label = "Muerto", danger = true)
+                    }
                 }
+            } else {
+                OutlinedTextField(
+                    value = character.playerName,
+                    onValueChange = { onUpdate(character.copy(playerName = it)) },
+                    label = { Text("Jugador") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
 
-                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = character.characterName,
+                    onValueChange = { onUpdate(character.copy(characterName = it)) },
+                    label = { Text("Personaje") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        if (isEditing) {
+            Spacer(Modifier.width(8.dp))
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Default.Delete, contentDescription = "Eliminar")
+            }
+        }
+    }
+}
+
+@Composable
+private fun CharacterInfoSection(
+    character: Character
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            InfoBadge(
+                label = "HP ${(character.currentHp?.toString() ?: "?")}/${character.maxHp?.toString() ?: "?"}",
+                highlighted = true
+            )
+
+            if (character.tempHp > 0) {
+                InfoBadge(label = "Temp ${character.tempHp}")
+            }
+        }
+    }
+}
+
+@Composable
+private fun CharacterEditSection(
+    character: Character,
+    onUpdate: (Character) -> Unit
+) {
+    val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
+
+    var initText by remember(character.id) { mutableStateOf(character.initiative.toString()) }
+    var currentHpText by remember(character.id) { mutableStateOf(character.currentHp?.toString() ?: "") }
+    var maxHpText by remember(character.id) { mutableStateOf(character.maxHp?.toString() ?: "") }
+    var tempHpText by remember(character.id) { mutableStateOf(character.tempHp.toString()) }
+    var pendingCameraUriString by rememberSaveable(character.id) { mutableStateOf<String?>(null) }
+
+    val takePicture = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        val pending = pendingCameraUriString
+
+        if (success && pending != null) {
+            com.dmc.initiativetracker.util.ImageStorage.deleteIfInternal(context, character.imageUri)
+            onUpdate(character.copy(imageUri = pending))
+        } else {
+            com.dmc.initiativetracker.util.ImageStorage.deleteFileUri(pending)
+        }
+
+        pendingCameraUriString = null
+    }
+
+    val requestCameraPermission = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            val outUri = com.dmc.initiativetracker.util.ImageStorage.createCameraOutputUri(context)
+            pendingCameraUriString = outUri.toString()
+            takePicture.launch(outUri)
+        }
+    }
+
+    val pickMedia = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            val internalUri = com.dmc.initiativetracker.util.ImageStorage
+                .copyToInternalStorage(context, uri)
+
+            com.dmc.initiativetracker.util.ImageStorage
+                .deleteIfInternal(context, character.imageUri)
+
+            onUpdate(character.copy(imageUri = internalUri))
+        }
+    }
+
+    val launchCameraWithPermission = {
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (granted) {
+            val outUri = com.dmc.initiativetracker.util.ImageStorage.createCameraOutputUri(context)
+            pendingCameraUriString = outUri.toString()
+            takePicture.launch(outUri)
+        } else {
+            requestCameraPermission.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            OutlinedTextField(
+                value = initText,
+                onValueChange = { txt ->
+                    if (txt.isBlank() || txt.all(Char::isDigit)) {
+                        initText = txt
+                        txt.toIntOrNull()?.let { onUpdate(character.copy(initiative = it)) }
+                    }
+                },
+                label = { Text("Iniciativa") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Next
+                )
+            )
+
+            OutlinedTextField(
+                value = currentHpText,
+                onValueChange = { txt ->
+                    if (txt.isBlank() || txt.all(Char::isDigit)) {
+                        currentHpText = txt
+                        onUpdate(character.copy(currentHp = txt.toIntOrNull()))
+                    }
+                },
+                label = { Text("HP actual") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Next
+                )
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            OutlinedTextField(
+                value = maxHpText,
+                onValueChange = { txt ->
+                    if (txt.isBlank() || txt.all(Char::isDigit)) {
+                        maxHpText = txt
+                        onUpdate(character.copy(maxHp = txt.toIntOrNull()))
+                    }
+                },
+                label = { Text("HP máximo") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Next
+                )
+            )
+
+            OutlinedTextField(
+                value = tempHpText,
+                onValueChange = { txt ->
+                    if (txt.isBlank() || txt.all(Char::isDigit)) {
+                        tempHpText = txt
+                        onUpdate(character.copy(tempHp = txt.toIntOrNull() ?: 0))
+                    }
+                },
+                label = { Text("Temp HP") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = { focusManager.clearFocus() }
+                )
+            )
+        }
+
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "Imagen y tipo",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedTextField(
-                        value = maxHpText,
-                        onValueChange = { txt ->
-                            if (txt.isBlank() || txt.all { it.isDigit() }) {
-                                maxHpText = txt
-                                val maxHp = txt.toIntOrNull()
-                                onUpdate(character.copy(maxHp = maxHp))
-                            }
-                        },
-                        label = { Text("HP máximo") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f).focusRequester(maxHpFR),
-                        keyboardOptions = KeyboardOptions.Default.copy(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Next
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onNext = {
-                                tempHpFR.requestFocus()
-                            }
-                        )
-                    )
-
-                    OutlinedTextField(
-                        value = tempHpText,
-                        onValueChange = { txt ->
-                            if (txt.isBlank() || txt.all { it.isDigit() }) {
-                                tempHpText = txt
-                                val tempHp = txt.toIntOrNull() ?: 0
-                                onUpdate(character.copy(tempHp = tempHp))
-                            }
-                        },
-                        label = { Text("Temp HP") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f).focusRequester(tempHpFR),
-                        keyboardOptions = KeyboardOptions.Default.copy(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                focusManager.clearFocus()
-                            }
-                        )
-                    )
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                val context = LocalContext.current
-
-
-                // Guardamos el uri pendiente entre recomposiciones (por si cambia estado)
-                var pendingCameraUriString by rememberSaveable(character.id) { mutableStateOf<String?>(null) }
-
-                val takePicture = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.TakePicture()
-                ) { success ->
-                    val pending = pendingCameraUriString
-
-                    if (success && pending != null) {
-                        // Si sacó foto: borramos anterior interna y guardamos la nueva
-                        com.dmc.initiativetracker.util.ImageStorage
-                            .deleteIfInternal(context, character.imageUri)
-
-                        onUpdate(character.copy(imageUri = pending))
-                    } else {
-                        // Si canceló: borramos el archivo que habíamos creado (por si quedó basura)
-                        com.dmc.initiativetracker.util.ImageStorage.deleteFileUri(pending)
-                    }
-
-                    pendingCameraUriString = null
-                }
-
-                val requestCameraPermission = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.RequestPermission()
-                ) { granted ->
-                    if (granted) {
-                        // lanzar cámara (mismo flujo que ya tenés)
-                        val outUri = com.dmc.initiativetracker.util.ImageStorage.createCameraOutputUri(context)
-                        pendingCameraUriString = outUri.toString()
-                        takePicture.launch(outUri)
-                    } else {
-                        // opcional: mostrar mensaje
-                        // Podés dejarlo vacío o usar Toast si querés.
-                    }
-                }
-
-                val pickMedia = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.PickVisualMedia()
-                ) { uri ->
-                    if (uri != null) {
-                        // Copiar a storage interno y guardar esa ruta estable
-                        val internalUri = com.dmc.initiativetracker.util.ImageStorage
-                            .copyToInternalStorage(context, uri)
-
-                        // borrar la anterior si era interna
-                        com.dmc.initiativetracker.util.ImageStorage
-                            .deleteIfInternal(context, character.imageUri)
-
-                        onUpdate(character.copy(imageUri = internalUri))
-                    }
-                }
-
-                val launchCameraWithPermission = {
-                    val granted = ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.CAMERA
-                    ) == PackageManager.PERMISSION_GRANTED
-
-                    if (granted) {
-                        val outUri = com.dmc.initiativetracker.util.ImageStorage.createCameraOutputUri(context)
-                        pendingCameraUriString = outUri.toString()
-                        takePicture.launch(outUri)
-                    } else {
-                        requestCameraPermission.launch(Manifest.permission.CAMERA)
-                    }
-                }
-
-                Spacer(Modifier.height(10.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     TextButton(onClick = launchCameraWithPermission) {
@@ -616,17 +741,18 @@ private fun CharacterCard(
                     }
 
                     if (character.imageUri != null) {
-                        TextButton(onClick = {
-                            com.dmc.initiativetracker.util.ImageStorage
-                                .deleteIfInternal(context, character.imageUri)
-                            onUpdate(character.copy(imageUri = null))
-                        }) {
+                        TextButton(
+                            onClick = {
+                                com.dmc.initiativetracker.util.ImageStorage
+                                    .deleteIfInternal(context, character.imageUri)
+                                onUpdate(character.copy(imageUri = null))
+                            }
+                        ) {
                             Text("Quitar")
                         }
                     }
                 }
 
-                // Type + Active
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -648,63 +774,62 @@ private fun CharacterCard(
                     }
                 }
             }
-            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
 
-            if (statuses.isNotEmpty() || isEditing) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+@Composable
+private fun CharacterStatusSection(
+    statuses: List<Status>,
+    isEditing: Boolean,
+    onAddStatus: () -> Unit,
+    onRemoveStatus: (Long) -> Unit
+) {
+    if (statuses.isEmpty() && !isEditing) return
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Estados",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
+
+            if (isEditing) {
+                AssistChip(
+                    onClick = onAddStatus,
+                    label = { Text("+Estado") }
+                )
+            }
+        }
+
+        when {
+            statuses.isEmpty() && isEditing -> {
+                Text(
+                    text = "Sin estados",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            statuses.isNotEmpty() -> {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Estados",
-                            style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.weight(1f)
-                        )
-
-                        if (isEditing) {
-                            AssistChip(
-                                onClick = onAddStatus,
-                                label = { Text("+Estado") }
-                            )
-                        }
-                    }
-
-                    if (statuses.isNotEmpty()) {
-                        statuses.forEach { status ->
-                            ElevatedCard(
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = formatRoundPrepStatus(status),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = roundPrepStatusColor(status),
-                                        modifier = Modifier.weight(1f)
-                                    )
-
-                                    if (isEditing) {
-                                        TextButton(onClick = { onRemoveStatus(status.id) }) {
-                                            Text("✕")
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } else if (isEditing) {
-                        Text(
-                            text = "Sin estados",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    statuses.forEach { status ->
+                        RoundPrepStatusChip(
+                            status = status,
+                            isEditing = isEditing,
+                            onRemove = { onRemoveStatus(status.id) }
                         )
                     }
                 }
@@ -712,12 +837,50 @@ private fun CharacterCard(
         }
     }
 }
+
+@Composable
+private fun RoundPrepStatusChip(
+    status: Status,
+    isEditing: Boolean,
+    onRemove: () -> Unit
+) {
+    val container = roundPrepStatusContainerColor(status)
+    val content = Color.White
+
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = container
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = formatRoundPrepStatus(status),
+                style = MaterialTheme.typography.labelLarge,
+                color = content,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            if (isEditing) {
+                TextButton(
+                    onClick = onRemove,
+                    modifier = Modifier.height(28.dp)
+                ) {
+                    Text("✕", color = content)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun CharacterTypeToggle(
     value: CharacterType,
     onChange: (CharacterType) -> Unit
 ) {
-    // Simple y robusto para MVP
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(
             selected = value == CharacterType.PLAYER,
@@ -748,7 +911,9 @@ private fun RoundPrepBottomBar(
             IconButton(onClick = onEnterEdit) {
                 Icon(Icons.Default.Edit, contentDescription = "Editar")
             }
-            Spacer(Modifier.width(8.dp))
+
+            Spacer(Modifier.width(10.dp))
+
             FloatingActionButton(
                 onClick = { if (state.canPlay) onPlay() },
                 containerColor = if (state.canPlay) {
@@ -763,11 +928,15 @@ private fun RoundPrepBottomBar(
             IconButton(onClick = onCancelEdit, enabled = !state.isSaving) {
                 Icon(Icons.Default.Close, contentDescription = "Cancelar cambios")
             }
-            Spacer(Modifier.width(8.dp))
+
+            Spacer(Modifier.width(10.dp))
+
             IconButton(onClick = onAdd, enabled = !state.isSaving) {
                 Icon(Icons.Default.Add, contentDescription = "Agregar personaje")
             }
-            Spacer(Modifier.width(8.dp))
+
+            Spacer(Modifier.width(10.dp))
+
             IconButton(onClick = onSave, enabled = !state.isSaving) {
                 Icon(Icons.Default.Check, contentDescription = "Guardar cambios")
             }
@@ -778,29 +947,74 @@ private fun RoundPrepBottomBar(
 }
 
 @Composable
+private fun InfoBadge(
+    label: String,
+    highlighted: Boolean = false,
+    danger: Boolean = false
+) {
+    val background = when {
+        danger -> MaterialTheme.colorScheme.errorContainer
+        highlighted -> MaterialTheme.colorScheme.primaryContainer
+        else -> MaterialTheme.colorScheme.secondaryContainer
+    }
+
+    val content = when {
+        danger -> MaterialTheme.colorScheme.onErrorContainer
+        highlighted -> MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.onSecondaryContainer
+    }
+
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = background
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = content
+        )
+    }
+}
+
+@Composable
 private fun LoadingCentered() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
         CircularProgressIndicator()
     }
 }
 
 @Composable
-private fun EmptyCentered(title: String, subtitle: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+private fun EmptyCentered(
+    title: String,
+    subtitle: String
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(title, style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
 
-@Composable
-private fun roundPrepStatusColor(status: Status) = when {
-    status.concentrationGroupId != null -> MaterialTheme.colorScheme.onSurface
-    status.type == StatusType.POSITIVE -> MaterialTheme.colorScheme.primary
-    status.type == StatusType.NEGATIVE -> MaterialTheme.colorScheme.error
-    else -> MaterialTheme.colorScheme.onSurfaceVariant
+private fun roundPrepStatusContainerColor(status: Status): Color {
+    return when {
+        status.concentrationGroupId != null -> Color(0xFF54606E)
+        status.type == StatusType.POSITIVE -> Color(0xFF2F6E4F)
+        status.type == StatusType.NEGATIVE -> Color(0xFF7A3E3E)
+        else -> Color(0xFF4E5D73)
+    }
 }
 
 private fun formatRoundPrepStatus(status: Status): String {

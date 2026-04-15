@@ -8,23 +8,30 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -33,17 +40,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dmc.initiativetracker.di.AppModule
 import com.dmc.initiativetracker.domain.model.RoundListItem
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.runtime.rememberCoroutineScope
+import com.dmc.initiativetracker.ui.preferences.SortPreferences
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,19 +62,21 @@ fun RoundSelectorScreen(
 ) {
     val context = LocalContext.current
 
-    val vm: RoundSelectorViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+    val factory = remember(context) {
+        object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
                 return RoundSelectorViewModel(
                     repo = AppModule.provideRoundRepository(context),
-                    sortPreferences = com.dmc.initiativetracker.ui.preferences.SortPreferences(context)
+                    sortPreferences = SortPreferences(context)
                 ) as T
             }
         }
-    )
+    }
 
+    val vm: RoundSelectorViewModel = viewModel(factory = factory)
     val state by vm.uiState.collectAsState()
+
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
@@ -104,7 +114,24 @@ fun RoundSelectorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Cargar ronda") },
+                title = {
+                    Column {
+                        Text(
+                            text = "Cargar ronda",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = if (state.rounds.isEmpty()) {
+                                "Sin rondas guardadas"
+                            } else {
+                                "${state.rounds.size} rondas disponibles"
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -137,7 +164,9 @@ fun RoundSelectorScreen(
 
                                         scope.launch {
                                             listState.scrollToItem(
-                                                index = currentIndex.coerceAtMost((state.rounds.size - 1).coerceAtLeast(0)),
+                                                index = currentIndex.coerceAtMost(
+                                                    (state.rounds.size - 1).coerceAtLeast(0)
+                                                ),
                                                 scrollOffset = currentOffset
                                             )
                                         }
@@ -159,14 +188,11 @@ fun RoundSelectorScreen(
         }
     ) { padding ->
         if (state.rounds.isEmpty()) {
-            Box(
+            EmptyRoundsState(
                 modifier = Modifier
                     .padding(padding)
-                    .fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("No hay rondas guardadas.")
-            }
+                    .fillMaxSize()
+            )
         } else {
             LazyColumn(
                 state = listState,
@@ -174,7 +200,7 @@ fun RoundSelectorScreen(
                     .padding(padding)
                     .fillMaxSize(),
                 contentPadding = PaddingValues(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(state.rounds, key = { it.id }) { round ->
                     RoundCard(
@@ -189,47 +215,112 @@ fun RoundSelectorScreen(
 }
 
 @Composable
+private fun EmptyRoundsState(
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "No hay rondas guardadas",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = "Volvé atrás y creá una ronda nueva.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
 private fun RoundCard(
     round: RoundListItem,
     onOpen: () -> Unit,
     onDelete: () -> Unit
 ) {
-    Card(
+    ElevatedCard(
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onOpen)
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column(Modifier.weight(1f)) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = round.name,
-                    style = MaterialTheme.typography.titleMedium
+                    text = round.name.ifBlank { "Sin nombre" },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
                 )
 
-                val countLabel = if (round.characterCount == 1) {
-                    "1 personaje"
-                } else {
-                    "${round.characterCount} personajes"
-                }
-
-                Text(
-                    text = countLabel,
-                    style = MaterialTheme.typography.bodySmall
-                )
                 Text(
                     text = "Creada: ${formatCreatedAt(round.createdAt)}",
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            TextButton(onClick = onDelete) {
-                Text("Eliminar")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    InfoBadge(
+                        label = if (round.characterCount == 1) {
+                            "1 personaje"
+                        } else {
+                            "${round.characterCount} personajes"
+                        },
+                        highlighted = true
+                    )
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                FilledTonalButton(onClick = onDelete) {
+                    Text("Eliminar")
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun InfoBadge(
+    label: String,
+    highlighted: Boolean = false
+) {
+    val background = if (highlighted) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.secondaryContainer
+    }
+
+    val content = if (highlighted) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    }
+
+    Surface(
+        color = background,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(999.dp)
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = content
+        )
     }
 }
 
