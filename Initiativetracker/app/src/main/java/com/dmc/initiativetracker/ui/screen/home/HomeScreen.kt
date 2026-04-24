@@ -41,7 +41,8 @@ import com.dmc.initiativetracker.R
 fun HomeScreen(
     onCreateRound: (Long) -> Unit,
     onLoadRound: () -> Unit,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
+    onImageLibrary: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -173,6 +174,15 @@ fun HomeScreen(
                         onClick = onSettings
                     ) {
                         Text("Ajustes")
+                    }
+
+                    FilledTonalButton(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        onClick = onImageLibrary
+                    ) {
+                        Text("Biblioteca de imágenes")
                     }
                 }
 

@@ -19,9 +19,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
@@ -53,6 +52,19 @@ import com.dmc.initiativetracker.di.AppModule
 import com.dmc.initiativetracker.domain.model.RoundListItem
 import com.dmc.initiativetracker.ui.preferences.SortPreferences
 import kotlinx.coroutines.launch
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import com.dmc.initiativetracker.export.RoundCodeCodec
+import com.dmc.initiativetracker.export.RoundTransfer
+import com.dmc.initiativetracker.export.summary
+import androidx.compose.foundation.layout.heightIn
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.ContentPaste
+import com.dmc.initiativetracker.export.RoundItrFile
+import com.dmc.initiativetracker.util.ImageStorage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,6 +88,14 @@ fun RoundSelectorScreen(
 
     val vm: RoundSelectorViewModel = viewModel(factory = factory)
     val state by vm.uiState.collectAsState()
+    var showImportCodeDialog by rememberSaveable { mutableStateOf(false) }
+    var importCodeText by rememberSaveable { mutableStateOf("") }
+    var pendingImportTransfer by remember { mutableStateOf<RoundTransfer?>(null) }
+    var showImportSummaryDialog by rememberSaveable { mutableStateOf(false) }
+    var showReplaceRoundDialog by rememberSaveable { mutableStateOf(false) }
+    var pendingReplaceRoundId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var showImportOptionsDialog by rememberSaveable { mutableStateOf(false) }
+    var pendingImportImageBytes by remember { mutableStateOf<Map<String, ByteArray>>(emptyMap()) }
 
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -84,6 +104,29 @@ fun RoundSelectorScreen(
         state.toast?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
             vm.consumeToast()
+        }
+    }
+
+    val openItrLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+
+        runCatching {
+            RoundItrFile.readItr(
+                context = context,
+                sourceUri = uri
+            )
+        }.onSuccess { payload ->
+            pendingImportTransfer = payload.transfer
+            pendingImportImageBytes = payload.images
+            showImportSummaryDialog = true
+        }.onFailure { error ->
+            Toast.makeText(
+                context,
+                error.message ?: "No se pudo leer el archivo .itr",
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -105,6 +148,315 @@ fun RoundSelectorScreen(
                     enabled = !state.isWorking,
                     onClick = vm::cancelDelete
                 ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (showImportCodeDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!state.isWorking) showImportCodeDialog = false
+            },
+            title = { Text("Importar código") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Pegá el código exportado desde Round Prep.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Text(
+                        text = "Después vas a poder crear una ronda nueva o reemplazar una existente.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    OutlinedTextField(
+                        value = importCodeText,
+                        onValueChange = { importCodeText = it },
+                        enabled = !state.isWorking,
+                        label = { Text("Código ITR1") },
+                        minLines = 4,
+                        maxLines = 8,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !state.isWorking,
+                    onClick = {
+                        try {
+                            val transfer = RoundCodeCodec.decode(importCodeText)
+
+                            pendingImportTransfer = transfer
+                            showImportCodeDialog = false
+                            showImportSummaryDialog = true
+                        } catch (t: Throwable) {
+                            Toast.makeText(
+                                context,
+                                t.message ?: "Código inválido",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                ) {
+                    Text(if (state.isWorking) "Importando..." else "Importar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !state.isWorking,
+                    onClick = { showImportCodeDialog = false }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (showImportSummaryDialog && pendingImportTransfer != null) {
+        val transfer = pendingImportTransfer!!
+        val summary = transfer.summary()
+
+        AlertDialog(
+            onDismissRequest = {
+                if (!state.isWorking) {
+                    showImportSummaryDialog = false
+                    pendingImportTransfer = null
+                    pendingImportImageBytes = emptyMap()
+                }
+            },
+            title = { Text("Importar ronda") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Nombre: ${summary.roundName}")
+                    Text("Personajes: ${summary.characterCount}")
+                    Text("Estados: ${summary.statusCount}")
+                    Text("Imágenes: ${summary.imageCount}")
+
+                    Text(
+                        text = if (pendingImportImageBytes.isEmpty()) {
+                            "El código no incluye imágenes. Los personajes importados aparecerán sin foto."
+                        } else {
+                            "Este archivo incluye imágenes. Se copiarán al almacenamiento interno de la app."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    FilledTonalButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !state.isWorking,
+                        onClick = {
+                            val imageUrisByFileName = pendingImportImageBytes.mapValues { entry ->
+                                ImageStorage.copyBytesToInternalStorage(
+                                    context = context,
+                                    bytes = entry.value,
+                                    originalFileName = entry.key
+                                )
+                            }
+
+                            vm.importRoundTransfer(
+                                transfer = transfer,
+                                replaceRoundId = null,
+                                imageUrisByFileName = imageUrisByFileName,
+                                onImported = { newRoundId ->
+                                    showImportSummaryDialog = false
+                                    pendingImportTransfer = null
+                                    pendingImportImageBytes = emptyMap()
+                                    importCodeText = ""
+                                    onOpenRound(newRoundId)
+                                }
+                            )
+                        }
+                    ) {
+                        Text("Crear ronda nueva")
+                    }
+
+                    FilledTonalButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !state.isWorking && state.rounds.isNotEmpty(),
+                        onClick = {
+                            showImportSummaryDialog = false
+                            showReplaceRoundDialog = true
+                        }
+                    ) {
+                        Text("Reemplazar ronda existente")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !state.isWorking,
+                    onClick = {
+                        showImportSummaryDialog = false
+                        pendingImportTransfer = null
+                        pendingImportImageBytes = emptyMap()
+                    }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (showReplaceRoundDialog && pendingImportTransfer != null) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!state.isWorking) {
+                    showReplaceRoundDialog = false
+                    showImportSummaryDialog = true
+                }
+            },
+            title = { Text("Reemplazar ronda") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Elegí qué ronda querés reemplazar.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 360.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(state.rounds, key = { it.id }) { round ->
+                            ElevatedCard(
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            pendingReplaceRoundId = round.id
+                                        }
+                                        .padding(12.dp)
+                                ) {
+                                    Text(
+                                        text = round.name.ifBlank { "Sin nombre" },
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+
+                                    Text(
+                                        text = "${round.characterCount} personajes",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    pendingReplaceRoundId?.let { selectedId ->
+                        val selectedRound = state.rounds.firstOrNull { it.id == selectedId }
+
+                        Text(
+                            text = "Seleccionada: ${selectedRound?.name ?: "Ronda"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !state.isWorking && pendingReplaceRoundId != null,
+                    onClick = {
+                        val transfer = pendingImportTransfer ?: return@TextButton
+                        val replaceId = pendingReplaceRoundId ?: return@TextButton
+
+                        val imageUrisByFileName = pendingImportImageBytes.mapValues { entry ->
+                            ImageStorage.copyBytesToInternalStorage(
+                                context = context,
+                                bytes = entry.value,
+                                originalFileName = entry.key
+                            )
+                        }
+
+                        vm.importRoundTransfer(
+                            transfer = transfer,
+                            replaceRoundId = replaceId,
+                            imageUrisByFileName = imageUrisByFileName,
+                            onImported = { importedRoundId ->
+                                showReplaceRoundDialog = false
+                                pendingImportTransfer = null
+                                pendingImportImageBytes = emptyMap()
+                                pendingReplaceRoundId = null
+                                importCodeText = ""
+                                onOpenRound(importedRoundId)
+                            }
+                        )
+                    }
+                ) {
+                    Text(if (state.isWorking) "Reemplazando..." else "Confirmar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !state.isWorking,
+                    onClick = {
+                        showReplaceRoundDialog = false
+                        pendingReplaceRoundId = null
+                        showImportSummaryDialog = true
+                    }
+                ) {
+                    Text("Volver")
+                }
+            }
+        )
+    }
+
+    if (showImportOptionsDialog) {
+        AlertDialog(
+            onDismissRequest = { showImportOptionsDialog = false },
+            title = { Text("Importar ronda") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Elegí cómo querés importar la ronda.")
+
+                    Text(
+                        text = "El código no incluye imágenes. El archivo .itr puede incluirlas.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    FilledTonalButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            showImportOptionsDialog = false
+                            importCodeText = ""
+                            pendingImportImageBytes = emptyMap()
+                            showImportCodeDialog = true
+                        }
+                    ) {
+                        Text("Pegar código")
+                    }
+
+                    FilledTonalButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            showImportOptionsDialog = false
+                            openItrLauncher.launch(
+                                arrayOf(
+                                    "application/octet-stream",
+                                    "application/zip",
+                                    "*/*"
+                                )
+                            )
+                        }
+                    ) {
+                        Text("Elegir archivo .itr")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showImportOptionsDialog = false }) {
                     Text("Cancelar")
                 }
             }
@@ -141,10 +493,25 @@ fun RoundSelectorScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        enabled = !state.isWorking,
+                        onClick = {
+                            importCodeText = ""
+                            pendingImportTransfer = null
+                            pendingImportImageBytes = emptyMap()
+                            pendingReplaceRoundId = null
+                            showImportOptionsDialog = true
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentPaste,
+                            contentDescription = "Importar ronda"
+                        )
+                    }
                     Box {
                         IconButton(onClick = vm::openSortMenu) {
                             Icon(
-                                imageVector = Icons.Default.Sort,
+                                imageVector = Icons.AutoMirrored.Filled.Sort,
                                 contentDescription = "Ordenar"
                             )
                         }

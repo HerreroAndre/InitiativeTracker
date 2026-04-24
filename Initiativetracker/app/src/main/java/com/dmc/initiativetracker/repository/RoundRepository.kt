@@ -5,6 +5,7 @@ import com.dmc.initiativetracker.domain.model.Round
 import com.dmc.initiativetracker.domain.model.Status
 import kotlinx.coroutines.flow.Flow
 import com.dmc.initiativetracker.domain.model.RoundListItem
+import com.dmc.initiativetracker.export.RoundTransfer
 
 interface RoundRepository {
     fun observeRoundName(roundId: Long): Flow<String>
@@ -12,7 +13,7 @@ interface RoundRepository {
     fun observeStatuses(roundId: Long): Flow<List<Status>>
 
     suspend fun upsertCharacter(character: Character)
-    suspend fun commitCharacterDraft(roundId: Long, draft: List<Character>)
+    suspend fun commitCharacterDraft(roundId: Long, draft: List<Character>): Map<Long, Long>
 
     suspend fun addStatus(status: Status): Long
     suspend fun removeStatus(statusId: Long)
@@ -32,4 +33,9 @@ interface RoundRepository {
     suspend fun createRound(name: String): Long
     suspend fun deleteRound(roundId: Long)
     suspend fun renameRound(roundId: Long, name: String)
+    suspend fun importRound(
+        transfer: RoundTransfer,
+        replaceRoundId: Long? = null,
+        imageUrisByFileName: Map<String, String> = emptyMap()
+    ): Long
 }

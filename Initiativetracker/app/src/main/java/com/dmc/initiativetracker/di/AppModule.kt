@@ -7,6 +7,8 @@ import com.dmc.initiativetracker.repository.CombatRepository
 import com.dmc.initiativetracker.repository.CombatRepositoryImpl
 import com.dmc.initiativetracker.repository.RoundRepository
 import com.dmc.initiativetracker.repository.RoundRepositoryImpl
+import com.dmc.initiativetracker.repository.ImageLibraryRepository
+import com.dmc.initiativetracker.repository.ImageLibraryRepositoryImpl
 
 object AppModule {
     @Volatile
@@ -17,6 +19,8 @@ object AppModule {
 
     @Volatile
     private var combatRepo: CombatRepository? = null
+    @Volatile
+    private var imageLibraryRepo: ImageLibraryRepository? = null
 
     fun provideDatabase(context: Context): AppDatabase =
         db ?: synchronized(this) {
@@ -43,4 +47,13 @@ object AppModule {
         combatRepo ?: synchronized(this) {
             combatRepo ?: CombatRepositoryImpl().also { combatRepo = it }
         }
+
+    fun provideImageLibraryRepository(context: Context): ImageLibraryRepository =
+        imageLibraryRepo ?: synchronized(this) {
+            imageLibraryRepo ?: ImageLibraryRepositoryImpl(
+                dao = provideDatabase(context).imageLibraryDao()
+            ).also { imageLibraryRepo = it }
+        }
+
+
 }

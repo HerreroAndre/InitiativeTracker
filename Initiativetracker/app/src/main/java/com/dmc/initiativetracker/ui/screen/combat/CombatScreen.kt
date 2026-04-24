@@ -69,12 +69,19 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.activity.compose.BackHandler
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.dmc.initiativetracker.domain.model.Character
 import com.dmc.initiativetracker.domain.model.CharacterType
 import com.dmc.initiativetracker.domain.model.Status
 import com.dmc.initiativetracker.domain.model.StatusType
+import com.dmc.initiativetracker.ui.theme.statusContainerColor
+import com.dmc.initiativetracker.ui.theme.statusContentColor
+import com.dmc.initiativetracker.ui.theme.statusInlineTextColor
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.IconButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,6 +96,10 @@ fun CombatScreen(
     var showEditTempHpDialog by rememberSaveable { mutableStateOf(false) }
     var showApplyDamageDialog by rememberSaveable { mutableStateOf(false) }
     var showAddStatusDialog by rememberSaveable { mutableStateOf(false) }
+    var showHealDialog by rememberSaveable { mutableStateOf(false) }
+    var showEndCombatDialog by rememberSaveable { mutableStateOf(false) }
+    var quickActionsExpanded by rememberSaveable { mutableStateOf(true) }
+    var statusSectionExpanded by rememberSaveable { mutableStateOf(true) }
 
     var selectedSheetCharacterId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showSheetActionsDialog by rememberSaveable { mutableStateOf(false) }
@@ -97,6 +108,14 @@ fun CombatScreen(
         val msg = state.toast ?: return@LaunchedEffect
         Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
         vm.consumeToast()
+    }
+
+    BackHandler {
+        when {
+            state.previewImageUri != null -> vm.closePreview()
+            state.isBottomSheetOpen -> vm.closeSheet()
+            else -> showEndCombatDialog = true
+        }
     }
 
     val current = state.current
@@ -171,6 +190,10 @@ fun CombatScreen(
                 showSheetActionsDialog = false
                 showApplyDamageDialog = true
             },
+            onHeal = {
+                showSheetActionsDialog = false
+                showHealDialog = true
+            },
             onAddStatus = {
                 showSheetActionsDialog = false
                 showAddStatusDialog = true
@@ -225,6 +248,20 @@ fun CombatScreen(
         )
     }
 
+    if (showHealDialog && targetCharacter != null) {
+        HealDialog(
+            onDismiss = {
+                showHealDialog = false
+                selectedSheetCharacterId = null
+            },
+            onConfirm = { amount ->
+                vm.heal(targetCharacter, amount)
+                showHealDialog = false
+                selectedSheetCharacterId = null
+            }
+        )
+    }
+
     if (showAddStatusDialog && targetCharacter != null) {
         AddStatusDialog(
             onDismiss = {
@@ -244,13 +281,40 @@ fun CombatScreen(
         )
     }
 
+    if (showEndCombatDialog) {
+        AlertDialog(
+            onDismissRequest = { showEndCombatDialog = false },
+            title = { Text("Terminar combate") },
+            text = {
+                Text("¿Seguro que querés terminar el combate? Se reiniciará el estado actual.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showEndCombatDialog = false
+                        vm.endCombat()
+                        onExit()
+                    }
+                ) {
+                    Text("Terminar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showEndCombatDialog = false }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             CombatTopBar(
                 roundCounter = state.roundCounter,
                 onEndCombat = {
-                    vm.endCombat()
-                    onExit()
+                    showEndCombatDialog = true
                 }
             )
         },
@@ -270,6 +334,10 @@ fun CombatScreen(
             current = current,
             currentStatuses = currentStatuses,
             onOpenPreview = { vm.openPreview(current?.imageUri) },
+            quickActionsExpanded = quickActionsExpanded,
+            onToggleQuickActions = { quickActionsExpanded = !quickActionsExpanded },
+            statusSectionExpanded = statusSectionExpanded,
+            onToggleStatusSection = { statusSectionExpanded = !statusSectionExpanded },
             onEditHp = {
                 selectedSheetCharacterId = null
                 showEditHpDialog = true
@@ -285,6 +353,10 @@ fun CombatScreen(
             onAddStatus = {
                 selectedSheetCharacterId = null
                 showAddStatusDialog = true
+            },
+            onHeal = {
+                selectedSheetCharacterId = null
+                showHealDialog = true
             },
             onRemoveStatus = { vm.removeStatus(it) },
             onAddDeathSuccess = {
@@ -329,7 +401,7 @@ private fun CombatTopBar(
             }
         },
         actions = {
-            FilledTonalIconButton(onClick = onEndCombat) {
+            IconButton(onClick = onEndCombat) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Terminar combate"
@@ -351,10 +423,15 @@ private fun CombatBody(
     onEditHp: () -> Unit,
     onEditTempHp: () -> Unit,
     onApplyDamage: () -> Unit,
+    onHeal: () -> Unit,
     onAddStatus: () -> Unit,
     onRemoveStatus: (Long) -> Unit,
     onAddDeathSuccess: () -> Unit,
-    onAddDeathFailure: () -> Unit
+    onAddDeathFailure: () -> Unit,
+    quickActionsExpanded: Boolean,
+    onToggleQuickActions: () -> Unit,
+    statusSectionExpanded: Boolean,
+    onToggleStatusSection: () -> Unit
 ) {
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
@@ -375,10 +452,12 @@ private fun CombatBody(
         )
 
         QuickActionsCard(
+            expanded = quickActionsExpanded,
+            onToggleExpanded = onToggleQuickActions,
             onEditHp = onEditHp,
             onEditTempHp = onEditTempHp,
             onApplyDamage = onApplyDamage,
-            onAddStatus = onAddStatus
+            onHeal = onHeal
         )
 
         if (current.type == CharacterType.PLAYER && current.currentHp == 0) {
@@ -392,6 +471,9 @@ private fun CombatBody(
 
         StatusSection(
             statuses = currentStatuses,
+            expanded = statusSectionExpanded,
+            onToggleExpanded = onToggleStatusSection,
+            onAddStatus = onAddStatus,
             onRemoveStatus = onRemoveStatus
         )
 
@@ -593,10 +675,12 @@ private fun InfoPill(
 
 @Composable
 private fun QuickActionsCard(
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
     onEditHp: () -> Unit,
     onEditTempHp: () -> Unit,
     onApplyDamage: () -> Unit,
-    onAddStatus: () -> Unit
+    onHeal: () -> Unit
 ) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -606,47 +690,62 @@ private fun QuickActionsCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = "Acciones rápidas",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                FilledTonalButton(
-                    onClick = onEditHp,
+                Text(
+                    text = "Acciones rápidas",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f)
-                ) {
-                    Text("HP")
-                }
+                )
 
-                FilledTonalButton(
-                    onClick = onEditTempHp,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Temp")
+                IconButton(onClick = onToggleExpanded) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (expanded) "Ocultar acciones" else "Mostrar acciones"
+                    )
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                OutlinedButton(
-                    onClick = onApplyDamage,
-                    modifier = Modifier.weight(1f)
+            if (expanded) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("Daño")
+                    FilledTonalButton(
+                        onClick = onEditHp,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("HP")
+                    }
+
+                    FilledTonalButton(
+                        onClick = onEditTempHp,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Temp")
+                    }
                 }
 
-                OutlinedButton(
-                    onClick = onAddStatus,
-                    modifier = Modifier.weight(1f)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("+ Estado")
+                    OutlinedButton(
+                        onClick = onApplyDamage,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Daño")
+                    }
+
+                    OutlinedButton(
+                        onClick = onHeal,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Curar")
+                    }
                 }
             }
         }
@@ -656,10 +755,11 @@ private fun QuickActionsCard(
 @Composable
 private fun StatusSection(
     statuses: List<Status>,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    onAddStatus: () -> Unit,
     onRemoveStatus: (Long) -> Unit
 ) {
-    if (statuses.isEmpty()) return
-
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp)
@@ -668,21 +768,51 @@ private fun StatusSection(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = "Estados",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                statuses.forEach { status ->
-                    StatusChip(
-                        status = status,
-                        onRemove = { onRemoveStatus(status.id) }
+                Text(
+                    text = "Estados",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+
+                AssistChip(
+                    onClick = onAddStatus,
+                    label = { Text("+ Estado") }
+                )
+
+                Spacer(Modifier.width(6.dp))
+
+                IconButton(onClick = onToggleExpanded) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (expanded) "Ocultar estados" else "Mostrar estados"
                     )
+                }
+            }
+
+            if (expanded) {
+                if (statuses.isEmpty()) {
+                    Text(
+                        text = "Sin estados",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        statuses.forEach { status ->
+                            StatusChip(
+                                status = status,
+                                onRemove = { onRemoveStatus(status.id) }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -694,8 +824,8 @@ private fun StatusChip(
     status: Status,
     onRemove: () -> Unit
 ) {
-    val container = statusContainerColor(status)
-    val content = statusContentColor(status)
+    val container = statusContainerColor(status.type)
+    val content = statusContentColor(status.type)
 
     Surface(
         shape = RoundedCornerShape(999.dp),
@@ -714,13 +844,15 @@ private fun StatusChip(
                 overflow = TextOverflow.Ellipsis
             )
 
-            TextButton(
+            IconButton(
                 onClick = onRemove,
-                modifier = Modifier.height(28.dp)
+                modifier = Modifier.size(28.dp)
             ) {
-                Text(
-                    text = "✕",
-                    color = content
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Quitar estado",
+                    tint = content,
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }
@@ -782,6 +914,8 @@ private fun SheetContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
         Row(
@@ -798,7 +932,7 @@ private fun SheetContent(
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(88.dp))
 
         if (ordered.isEmpty()) {
             Text(
@@ -934,7 +1068,7 @@ private fun SheetRow(
                             Text(
                                 text = formatStatus(status),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = statusContainerColor(status),
+                                color = statusInlineTextColor(status.type),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -1242,6 +1376,45 @@ private fun ApplyDamageDialog(
 }
 
 @Composable
+private fun HealDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    var text by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Curar") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                label = { Text("Cantidad") }
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val value = text.trim().toIntOrNull()
+                    if (value != null && value > 0) {
+                        onConfirm(value)
+                    }
+                }
+            ) {
+                Text("Curar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+@Composable
 private fun AddStatusDialog(
     onDismiss: () -> Unit,
     onConfirm: (name: String, type: StatusType, duration: Int) -> Unit
@@ -1317,6 +1490,7 @@ private fun SheetCharacterActionsDialog(
     onEditHp: () -> Unit,
     onEditTempHp: () -> Unit,
     onApplyDamage: () -> Unit,
+    onHeal: () -> Unit,
     onAddStatus: () -> Unit,
     onRemoveStatus: (Long) -> Unit
 ) {
@@ -1356,10 +1530,14 @@ private fun SheetCharacterActionsDialog(
                         label = { Text("Daño") }
                     )
                     AssistChip(
-                        onClick = onAddStatus,
-                        label = { Text("+Estado") }
+                        onClick = onHeal,
+                        label = { Text("Curar") }
                     )
                 }
+                AssistChip(
+                    onClick = onAddStatus,
+                    label = { Text("+Estado") }
+                )
 
                 if (statuses.isNotEmpty()) {
                     HorizontalDivider()
@@ -1377,11 +1555,16 @@ private fun SheetCharacterActionsDialog(
                             ) {
                                 Text(
                                     text = formatStatus(status),
-                                    color = statusTextColor(status),
+                                    color = statusInlineTextColor(status.type),
                                     modifier = Modifier.weight(1f)
                                 )
-                                TextButton(onClick = { onRemoveStatus(status.id) }) {
-                                    Text("Quitar")
+                                IconButton(
+                                    onClick={onRemoveStatus(status.id)},
+                                    modifier = Modifier.size(32.dp)
+                                ){
+                                    Icon(imageVector=Icons.Default.Close,
+                                        contentDescription = "Quitar estado",
+                                        modifier = Modifier.size(18.dp))
                                 }
                             }
                         }
@@ -1419,29 +1602,6 @@ private fun buildHpChipLabel(character: Character): String {
     return "HP: $current/$max"
 }
 
-private fun statusContainerColor(status: Status): Color {
-    return when {
-        status.concentrationGroupId != null -> Color(0xFF54606E)
-        status.type == StatusType.POSITIVE -> Color(0xFF2F6E4F)
-        status.type == StatusType.NEGATIVE -> Color(0xFF7A3E3E)
-        else -> Color(0xFF4E5D73)
-    }
-}
-
-@Composable
-private fun statusTextColor(status: Status): Color {
-    return when {
-        status.concentrationGroupId != null -> MaterialTheme.colorScheme.tertiary
-        status.type == StatusType.POSITIVE -> Color(0xFF2F6E4F)
-        status.type == StatusType.NEGATIVE -> Color(0xFFB24A4A)
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-}
-
-private fun statusContentColor(status: Status): Color {
-    return Color.White
-}
-
 private fun formatStatus(status: Status): String {
     val prefix = when (status.type) {
         StatusType.POSITIVE -> "+"
@@ -1454,10 +1614,5 @@ private fun formatStatus(status: Status): String {
     } else {
         "$prefix ${status.name} (${status.durationRounds})"
     }
-
-    return if (status.concentrationGroupId != null) {
-        "$base • Conc."
-    } else {
-        base
-    }
+    return base
 }

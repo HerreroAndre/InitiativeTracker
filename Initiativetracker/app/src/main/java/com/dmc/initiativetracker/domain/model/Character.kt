@@ -5,7 +5,7 @@ data class Character(
     val roundId: Long,
     val playerName: String,
     val characterName: String,
-    val initiative: Int,
+    val initiative: Double,
     val imageUri: String?,
 
     val currentHp: Int?,   // null => "?"

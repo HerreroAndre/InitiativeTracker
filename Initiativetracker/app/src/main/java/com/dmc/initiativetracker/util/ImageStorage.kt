@@ -59,5 +59,44 @@ object ImageStorage {
         }
     }
 
+    fun deleteAnyUri(context: Context, uriString: String?) {
+        if (uriString.isNullOrBlank()) return
+
+        runCatching {
+            val uri = Uri.parse(uriString)
+
+            when (uri.scheme) {
+                "file" -> {
+                    val path = uri.path ?: return
+                    File(path).delete()
+                }
+                "content" -> {
+                    context.contentResolver.delete(uri, null, null)
+                }
+            }
+        }
+    }
+
+    fun copyBytesToInternalStorage(
+        context: Context,
+        bytes: ByteArray,
+        originalFileName: String? = null
+    ): String {
+        val imagesDir = File(context.filesDir, DIR_NAME).apply { mkdirs() }
+
+        val extension = originalFileName
+            ?.substringAfterLast('.', missingDelimiterValue = "")
+            ?.lowercase()
+            ?.takeIf { it in setOf("jpg", "jpeg", "png", "webp") }
+            ?: "jpg"
+
+        val destFile = File(imagesDir, "${UUID.randomUUID()}.$extension")
+
+        destFile.outputStream().use { output ->
+            output.write(bytes)
+        }
+
+        return destFile.toURI().toString()
+    }
 
 }

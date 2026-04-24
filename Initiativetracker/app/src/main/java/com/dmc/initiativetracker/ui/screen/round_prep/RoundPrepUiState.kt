@@ -29,16 +29,3 @@ data class RoundPrepUiState(
     val canPlay: Boolean =
         shownCharacters.any { it.isActive && !it.isDead }
 }
-
-data class CharacterItem(
-    val id: Long = 0L,
-    val roundId: Long = 0L,
-    val playerName: String = "",
-    val characterName: String = "",
-    val initiative: Int = 0,
-    val hp: Int? = null,
-    val isPlayer: Boolean = true,
-    val isActive: Boolean = true,
-    val imageUri: String? = null,
-    val stableUid: String = UUID.randomUUID().toString()
-)

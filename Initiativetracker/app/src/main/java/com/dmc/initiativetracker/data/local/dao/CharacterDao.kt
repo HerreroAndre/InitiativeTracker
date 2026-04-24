@@ -36,4 +36,10 @@ interface CharacterDao {
 
     @Query("SELECT id FROM characters WHERE roundId = :roundId")
     suspend fun getIdsByRoundId(roundId: Long): List<Long>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(character: CharacterEntity): Long
+
+    @Query("DELETE FROM characters WHERE roundId = :roundId")
+    suspend fun deleteByRoundId(roundId: Long)
 }

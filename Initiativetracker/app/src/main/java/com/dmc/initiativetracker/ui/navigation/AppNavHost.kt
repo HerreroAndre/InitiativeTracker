@@ -1,6 +1,7 @@
 package com.dmc.initiativetracker.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.navigation.NavType
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
@@ -14,6 +15,11 @@ import com.dmc.initiativetracker.ui.screen.settings.SettingsRoute
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.dmc.initiativetracker.ui.theme.ThemeViewModel
+import com.dmc.initiativetracker.ui.screen.image_library.ImageLibraryScreen
+import com.dmc.initiativetracker.ui.screen.image_library.ImageLibraryViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 
 @Composable
 fun AppNavHost(
@@ -30,7 +36,9 @@ fun AppNavHost(
                     nav.navigate(Routes.roundPrep(roundId))
                 },
                 onLoadRound = { nav.navigate(Routes.ROUND_SELECTOR) },
-                onSettings = { nav.navigate(Routes.SETTINGS) }
+                onSettings = { nav.navigate(Routes.SETTINGS) },
+                onImageLibrary = { nav.navigate(Routes.imageLibrary()) }
+
             )
         }
 
@@ -53,12 +61,23 @@ fun AppNavHost(
             arguments = listOf(navArgument("roundId") { type = NavType.LongType })
         ) { backStack ->
             val roundId = backStack.arguments?.getLong("roundId") ?: 0L
+            val selectedLibraryImageUri =
+                backStack.savedStateHandle
+                    .getStateFlow<String?>("selectedLibraryImageUri", null)
+                    .collectAsState()
+                    .value
+
 
             RoundPrepRoute(
                 roundId = roundId,
                 repo = AppModule.provideRoundRepository(context),
                 onBack = { nav.popBackStack() },
-                onStartCombat = { id -> nav.navigate(Routes.combat(id)) }
+                onStartCombat = { id -> nav.navigate(Routes.combat(id)) },
+                onOpenImageLibrary = { nav.navigate(Routes.imageLibrary(selectable = true)) },
+                selectedLibraryImageUri = selectedLibraryImageUri,
+                onConsumeLibraryImageSelection = {
+                    backStack.savedStateHandle["selectedLibraryImageUri"] = null
+                }
             )
         }
 
@@ -73,6 +92,42 @@ fun AppNavHost(
                 repo = AppModule.provideRoundRepository(context),
                 combatRepo = AppModule.provideCombatRepository(),
                 onExit = { nav.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Routes.IMAGE_LIBRARY,
+            arguments = listOf(
+                navArgument("selectable") {
+                    type = NavType.BoolType
+                    defaultValue = false
+                }
+            )
+        ) { backStack ->
+            val selectable = backStack.arguments?.getBoolean("selectable") ?: false
+
+            val factory = object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    return ImageLibraryViewModel(
+                        AppModule.provideImageLibraryRepository(context)
+                    ) as T
+                }
+            }
+
+            val vm: ImageLibraryViewModel = viewModel(factory = factory)
+
+            ImageLibraryScreen(
+                vm = vm,
+                selectable = selectable,
+                onSelectImage = { imageUri ->
+                    nav.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.set("selectedLibraryImageUri", imageUri)
+
+                    nav.popBackStack()
+                },
+                onBack = { nav.popBackStack() }
             )
         }
     }

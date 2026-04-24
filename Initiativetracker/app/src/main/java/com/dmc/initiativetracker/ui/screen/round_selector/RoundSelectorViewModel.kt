@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.dmc.initiativetracker.export.RoundCodeCodec
+import com.dmc.initiativetracker.export.RoundTransfer
 
 class RoundSelectorViewModel(
     private val repo: RoundRepository,
@@ -96,6 +98,63 @@ class RoundSelectorViewModel(
             RoundSortOption.NAME_DESC -> rounds.sortedByDescending { it.name.lowercase() }
             RoundSortOption.PLAYERS_ASC -> rounds.sortedBy { it.characterCount }
             RoundSortOption.PLAYERS_DESC -> rounds.sortedByDescending { it.characterCount }
+        }
+    }
+    fun importRoundCode(
+        code: String,
+        onImported: (Long) -> Unit
+    ) = viewModelScope.launch {
+        val trimmed = code.trim()
+
+        if (trimmed.isBlank()) {
+            toast.value = "Pegá un código de ronda"
+            return@launch
+        }
+
+        try {
+            isWorking.value = true
+
+            val transfer = RoundCodeCodec.decode(trimmed)
+            val newRoundId = repo.importRound(
+                transfer = transfer,
+                replaceRoundId = null
+            )
+
+            toast.value = "Ronda importada"
+            onImported(newRoundId)
+        } catch (t: Throwable) {
+            toast.value = t.message ?: "Código inválido"
+        } finally {
+            isWorking.value = false
+        }
+    }
+
+    fun importRoundTransfer(
+        transfer: RoundTransfer,
+        replaceRoundId: Long?,
+        imageUrisByFileName: Map<String, String> = emptyMap(),
+        onImported: (Long) -> Unit
+    ) = viewModelScope.launch {
+        try {
+            isWorking.value = true
+
+            val roundId = repo.importRound(
+                transfer = transfer,
+                replaceRoundId = replaceRoundId,
+                imageUrisByFileName = imageUrisByFileName
+            )
+
+            toast.value = if (replaceRoundId == null) {
+                "Ronda importada"
+            } else {
+                "Ronda reemplazada"
+            }
+
+            onImported(roundId)
+        } catch (t: Throwable) {
+            toast.value = t.message ?: "No se pudo importar la ronda"
+        } finally {
+            isWorking.value = false
         }
     }
 }

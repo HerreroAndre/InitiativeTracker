@@ -35,7 +35,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.BottomAppBar
@@ -71,7 +71,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -90,6 +89,20 @@ import com.dmc.initiativetracker.domain.model.Status
 import com.dmc.initiativetracker.domain.model.StatusType
 import com.dmc.initiativetracker.viewmodel.RoundPrepUiState
 import kotlinx.coroutines.launch
+import com.dmc.initiativetracker.ui.theme.statusContainerColor
+import com.dmc.initiativetracker.ui.theme.statusContentColor
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import com.dmc.initiativetracker.export.RoundCodeCodec
+import com.dmc.initiativetracker.export.buildRoundTransfer
+import com.dmc.initiativetracker.export.RoundItrExportPayload
+import com.dmc.initiativetracker.export.RoundItrFile
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.FilledTonalButton
+import android.net.Uri
+import com.dmc.initiativetracker.util.ImageStorage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,12 +110,18 @@ fun RoundPrepScreen(
     vm: RoundPrepViewModel,
     onBack: () -> Unit,
     onStartCombat: () -> Unit,
-) {
+    onOpenImageLibrary: () -> Unit,
+    selectedLibraryImageUri: String?,
+    onConsumeLibraryImageSelection: () -> Unit,
+    onSaveImageToLibrary: (String, String) -> Unit
+){
     val state by vm.uiState.collectAsState()
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    var pendingLibraryCharacterId by rememberSaveable { mutableStateOf<Long?>(null) }
 
     LaunchedEffect(state.errorMessage) {
         val msg = state.errorMessage ?: return@LaunchedEffect
@@ -115,12 +134,44 @@ fun RoundPrepScreen(
         Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
         vm.consumeToast()
     }
+    LaunchedEffect(selectedLibraryImageUri) {
+        val imageUri = selectedLibraryImageUri ?: return@LaunchedEffect
+        val characterId = pendingLibraryCharacterId ?: return@LaunchedEffect
+
+        val target = state.draft.firstOrNull { it.id == characterId } ?: return@LaunchedEffect
+
+        val copiedUri = runCatching {
+            ImageStorage.copyToInternalStorage(
+                context = context,
+                sourceUri = Uri.parse(imageUri)
+            )
+        }.getOrElse {
+            pendingLibraryCharacterId = null
+            onConsumeLibraryImageSelection()
+            Toast.makeText(
+                context,
+                "No se pudo copiar la imagen de la biblioteca",
+                Toast.LENGTH_SHORT
+            ).show()
+            return@LaunchedEffect
+        }
+
+        vm.updateDraftCharacter(
+            target.copy(imageUri = copiedUri)
+        )
+
+        pendingLibraryCharacterId = null
+        onConsumeLibraryImageSelection()
+    }
 
     var renameOpen by remember { mutableStateOf(false) }
     var renameText by remember(state.roundName) { mutableStateOf(state.roundName) }
     val canRename = renameText.trim().isNotBlank() && !state.isSaving
     var selectedStatusCharacterId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showAddStatusDialog by rememberSaveable { mutableStateOf(false) }
+    var pendingDeleteCharacter by rememberSaveable { mutableStateOf<Character?>(null) }
+    var showExportDialog by rememberSaveable { mutableStateOf(false) }
+    var pendingItrPayload by remember { mutableStateOf<RoundItrExportPayload?>(null) }
 
     if (renameOpen) {
         AlertDialog(
@@ -218,6 +269,144 @@ fun RoundPrepScreen(
         }
     }
 
+    pendingDeleteCharacter?.let { character ->
+        AlertDialog(
+            onDismissRequest = {
+                if (!state.isSaving) pendingDeleteCharacter = null
+            },
+            title = { Text("Eliminar personaje") },
+            text = {
+                Text(
+                    "¿Seguro que querés eliminar a ${
+                        character.characterName.ifBlank { character.playerName.ifBlank { "este personaje" } }
+                    }?"
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !state.isSaving,
+                    onClick = {
+                        vm.removeDraftCharacter(character.id)
+                        pendingDeleteCharacter = null
+                    }
+                ) {
+                    Text("Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !state.isSaving,
+                    onClick = { pendingDeleteCharacter = null }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    val createItrLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        val payload = pendingItrPayload
+        pendingItrPayload = null
+
+        if (uri == null || payload == null) return@rememberLauncherForActivityResult
+
+        runCatching {
+            RoundItrFile.writeItr(
+                context = context,
+                destinationUri = uri,
+                payload = payload
+            )
+        }.onSuccess {
+            Toast.makeText(
+                context,
+                "Archivo .itr exportado",
+                Toast.LENGTH_SHORT
+            ).show()
+        }.onFailure { error ->
+            Toast.makeText(
+                context,
+                error.message ?: "No se pudo exportar el archivo",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    if (showExportDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportDialog = false },
+            title = { Text("Exportar ronda") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Elegí cómo querés exportar esta ronda.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Text(
+                        text = "El código no incluye imágenes. El archivo .itr incluye imágenes si existen.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    FilledTonalButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            val transfer = buildRoundTransfer(
+                                roundName = state.roundName,
+                                characters = state.characters,
+                                statuses = state.statuses
+                            )
+
+                            val code = RoundCodeCodec.encode(transfer)
+
+                            clipboardManager.setText(AnnotatedString(code))
+
+                            Toast.makeText(
+                                context,
+                                "Código de ronda copiado",
+                                Toast.LENGTH_SHORT
+                            ).show()
+
+                            showExportDialog = false
+                        }
+                    ) {
+                        Text("Copiar código sin imágenes")
+                    }
+
+                    FilledTonalButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            val payload = RoundItrFile.buildExportPayload(
+                                roundName = state.roundName,
+                                characters = state.characters,
+                                statuses = state.statuses
+                            )
+
+                            pendingItrPayload = payload
+
+                            createItrLauncher.launch(
+                                "${safeItrFileName(state.roundName)}.itr"
+                            )
+
+                            showExportDialog = false
+                        }
+                    ) {
+                        Text("Exportar archivo .itr")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { showExportDialog = false }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -248,12 +437,21 @@ fun RoundPrepScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        enabled = !state.isEditing && state.characters.isNotEmpty(),
+                        onClick = { showExportDialog = true }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Exportar ronda"
+                        )
+                    }
                     Box {
                         IconButton(
                             onClick = vm::openSortMenu,
                             enabled = !state.isSaving
                         ) {
-                            Icon(Icons.Default.Sort, contentDescription = "Ordenar")
+                            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Ordenar")
                         }
 
                         DropdownMenu(
@@ -310,7 +508,10 @@ fun RoundPrepScreen(
                 onPlay = onStartCombat,
                 onCancelEdit = vm::cancelEdit,
                 onAdd = vm::addCharacterToDraft,
-                onSave = vm::confirmEdit
+                onSave = {
+                    focusManager.clearFocus(force = true)
+                    vm.confirmEdit()
+                }
             )
         }
     ) { padding ->
@@ -321,12 +522,19 @@ fun RoundPrepScreen(
             state = state,
             listState = listState,
             onUpdateDraft = vm::updateDraftCharacter,
-            onDeleteDraft = vm::removeDraftCharacter,
+            onDeleteDraft = { characterId ->
+                pendingDeleteCharacter = state.draft.firstOrNull { it.id == characterId }
+            },
             onAddStatus = { characterId ->
                 selectedStatusCharacterId = characterId
                 showAddStatusDialog = true
             },
-            onRemoveStatus = vm::requestRemovePreCombatStatus
+            onRemoveStatus = vm::requestRemovePreCombatStatus,
+            onOpenLibrary = { characterId ->
+                pendingLibraryCharacterId = characterId
+                onOpenImageLibrary()
+            },
+            onSaveImageToLibrary = onSaveImageToLibrary
         )
     }
 }
@@ -339,8 +547,10 @@ private fun RoundPrepContent(
     onUpdateDraft: (Character) -> Unit,
     onDeleteDraft: (Long) -> Unit,
     onAddStatus: (Long) -> Unit,
-    onRemoveStatus: (Long) -> Unit
-) {
+    onRemoveStatus: (Long) -> Unit,
+    onOpenLibrary: (Long) -> Unit,
+    onSaveImageToLibrary: (String, String) -> Unit
+){
     val list = state.shownCharacters
     val statusesByCharacter = remember(state.statuses) {
         state.statuses.groupBy { it.characterId }
@@ -381,7 +591,9 @@ private fun RoundPrepContent(
                             onUpdate = onUpdateDraft,
                             onDelete = { onDeleteDraft(character.id) },
                             onAddStatus = { onAddStatus(character.id) },
-                            onRemoveStatus = onRemoveStatus
+                            onRemoveStatus = onRemoveStatus,
+                            onOpenLibrary = { onOpenLibrary(character.id) },
+                            onSaveImageToLibrary = onSaveImageToLibrary
                         )
                     }
                 }
@@ -402,8 +614,10 @@ private fun CharacterCard(
     onUpdate: (Character) -> Unit,
     onDelete: () -> Unit,
     onAddStatus: () -> Unit,
-    onRemoveStatus: (Long) -> Unit
-) {
+    onRemoveStatus: (Long) -> Unit,
+    onOpenLibrary: () -> Unit,
+    onSaveImageToLibrary: (String, String) -> Unit
+){
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp)
@@ -422,7 +636,9 @@ private fun CharacterCard(
             if (isEditing) {
                 CharacterEditSection(
                     character = character,
-                    onUpdate = onUpdate
+                    onUpdate = onUpdate,
+                    onOpenLibrary = onOpenLibrary,
+                    onSaveImageToLibrary = onSaveImageToLibrary
                 )
             } else {
                 CharacterInfoSection(character = character)
@@ -449,6 +665,29 @@ private fun CharacterCardHeader(
 ) {
     val context = LocalContext.current
     val fallbackPainter = rememberVectorPainter(Icons.Default.Person)
+    val focusManager = LocalFocusManager.current
+
+    var playerNameText by rememberSaveable(character.id) {
+        mutableStateOf(character.playerName)
+    }
+
+    var characterNameText by rememberSaveable(character.id) {
+        mutableStateOf(character.characterName)
+    }
+
+    fun commitNames() {
+        if (
+            playerNameText != character.playerName ||
+            characterNameText != character.characterName
+        ) {
+            onUpdate(
+                character.copy(
+                    playerName = playerNameText,
+                    characterName = characterNameText
+                )
+            )
+        }
+    }
 
     Row(
         verticalAlignment = Alignment.CenterVertically
@@ -471,7 +710,13 @@ private fun CharacterCardHeader(
         Spacer(Modifier.width(12.dp))
 
         Column(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .onFocusChanged { focusState ->
+                    if (!focusState.hasFocus && isEditing) {
+                        commitNames()
+                    }
+                },
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             if (!isEditing) {
@@ -495,7 +740,10 @@ private fun CharacterCardHeader(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    InfoBadge(label = "Init ${character.initiative}", highlighted = true)
+                    InfoBadge(
+                        label = "Init ${formatInitiative(character.initiative)}",
+                        highlighted = true
+                    )
 
                     InfoBadge(
                         label = if (character.type == CharacterType.PLAYER) "PLAYER" else "NPC"
@@ -511,19 +759,38 @@ private fun CharacterCardHeader(
                 }
             } else {
                 OutlinedTextField(
-                    value = character.playerName,
-                    onValueChange = { onUpdate(character.copy(playerName = it)) },
+                    value = playerNameText,
+                    onValueChange = { playerNameText = it },
                     label = { Text("Jugador") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = ImeAction.Next
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onNext = {
+                            commitNames()
+                            focusManager.moveFocus(FocusDirection.Next)
+                        }
+                    )
                 )
 
                 OutlinedTextField(
-                    value = character.characterName,
-                    onValueChange = { onUpdate(character.copy(characterName = it)) },
+                    value = characterNameText,
+                    onValueChange = { characterNameText = it },
                     label = { Text("Personaje") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = ImeAction.Next
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onNext = {
+                            commitNames()
+                            focusManager.moveFocus(FocusDirection.Next)
+                        }
+                    )
+
                 )
             }
         }
@@ -561,16 +828,39 @@ private fun CharacterInfoSection(
 @Composable
 private fun CharacterEditSection(
     character: Character,
-    onUpdate: (Character) -> Unit
+    onUpdate: (Character) -> Unit,
+    onOpenLibrary: () -> Unit,
+    onSaveImageToLibrary: (String, String) -> Unit
 ) {
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
 
-    var initText by remember(character.id) { mutableStateOf(character.initiative.toString()) }
+    var initText by remember(character.id) {
+        mutableStateOf(formatInitiative(character.initiative))
+    }
     var currentHpText by remember(character.id) { mutableStateOf(character.currentHp?.toString() ?: "") }
     var maxHpText by remember(character.id) { mutableStateOf(character.maxHp?.toString() ?: "") }
     var tempHpText by remember(character.id) { mutableStateOf(character.tempHp.toString()) }
     var pendingCameraUriString by rememberSaveable(character.id) { mutableStateOf<String?>(null) }
+
+    fun commitStats() {
+        val normalizedInitiative = initText
+            .trim()
+            .replace(',', '.')
+            .toDoubleOrNull()
+            ?: character.initiative
+
+        val updated = character.copy(
+            initiative = normalizedInitiative,
+            currentHp = currentHpText.trim().toIntOrNull(),
+            maxHp = maxHpText.trim().toIntOrNull(),
+            tempHp = tempHpText.trim().toIntOrNull() ?: 0
+        )
+
+        if (updated != character) {
+            onUpdate(updated)
+        }
+    }
 
     val takePicture = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
@@ -578,10 +868,24 @@ private fun CharacterEditSection(
         val pending = pendingCameraUriString
 
         if (success && pending != null) {
-            com.dmc.initiativetracker.util.ImageStorage.deleteIfInternal(context, character.imageUri)
+            val libraryUri = runCatching {
+                ImageStorage.copyToInternalStorage(
+                    context = context,
+                    sourceUri = Uri.parse(pending)
+                )
+            }.getOrNull()
+
+            ImageStorage.deleteIfInternal(context, character.imageUri)
             onUpdate(character.copy(imageUri = pending))
+
+            libraryUri?.let {
+                onSaveImageToLibrary(
+                    suggestedLibraryImageName(character),
+                    it
+                )
+            }
         } else {
-            com.dmc.initiativetracker.util.ImageStorage.deleteFileUri(pending)
+            ImageStorage.deleteFileUri(pending)
         }
 
         pendingCameraUriString = null
@@ -601,13 +905,24 @@ private fun CharacterEditSection(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
-            val internalUri = com.dmc.initiativetracker.util.ImageStorage
-                .copyToInternalStorage(context, uri)
+            runCatching {
+                val characterUri = ImageStorage.copyToInternalStorage(context, uri)
+                val libraryUri = ImageStorage.copyToInternalStorage(context, uri)
 
-            com.dmc.initiativetracker.util.ImageStorage
-                .deleteIfInternal(context, character.imageUri)
+                ImageStorage.deleteIfInternal(context, character.imageUri)
 
-            onUpdate(character.copy(imageUri = internalUri))
+                onUpdate(character.copy(imageUri = characterUri))
+                onSaveImageToLibrary(
+                    suggestedLibraryImageName(character),
+                    libraryUri
+                )
+            }.onFailure {
+                Toast.makeText(
+                    context,
+                    "No se pudo cargar la imagen",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 
@@ -626,7 +941,14 @@ private fun CharacterEditSection(
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        modifier = Modifier.onFocusChanged { focusState ->
+            if (!focusState.hasFocus) {
+                commitStats()
+            }
+        },
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -634,17 +956,24 @@ private fun CharacterEditSection(
             OutlinedTextField(
                 value = initText,
                 onValueChange = { txt ->
-                    if (txt.isBlank() || txt.all(Char::isDigit)) {
+                    val normalized = txt.replace(',', '.')
+
+                    if (isValidDecimalInput(normalized)) {
                         initText = txt
-                        txt.toIntOrNull()?.let { onUpdate(character.copy(initiative = it)) }
                     }
                 },
                 label = { Text("Iniciativa") },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
                 keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
+                    keyboardType = KeyboardType.Decimal,
                     imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = {
+                        commitStats()
+                        focusManager.moveFocus(FocusDirection.Next)
+                    }
                 )
             )
 
@@ -653,7 +982,6 @@ private fun CharacterEditSection(
                 onValueChange = { txt ->
                     if (txt.isBlank() || txt.all(Char::isDigit)) {
                         currentHpText = txt
-                        onUpdate(character.copy(currentHp = txt.toIntOrNull()))
                     }
                 },
                 label = { Text("HP actual") },
@@ -662,6 +990,12 @@ private fun CharacterEditSection(
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Number,
                     imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = {
+                        commitStats()
+                        focusManager.moveFocus(FocusDirection.Next)
+                    }
                 )
             )
         }
@@ -675,7 +1009,6 @@ private fun CharacterEditSection(
                 onValueChange = { txt ->
                     if (txt.isBlank() || txt.all(Char::isDigit)) {
                         maxHpText = txt
-                        onUpdate(character.copy(maxHp = txt.toIntOrNull()))
                     }
                 },
                 label = { Text("HP máximo") },
@@ -684,6 +1017,12 @@ private fun CharacterEditSection(
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Number,
                     imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = {
+                        commitStats()
+                        focusManager.moveFocus(FocusDirection.Next)
+                    }
                 )
             )
 
@@ -692,7 +1031,6 @@ private fun CharacterEditSection(
                 onValueChange = { txt ->
                     if (txt.isBlank() || txt.all(Char::isDigit)) {
                         tempHpText = txt
-                        onUpdate(character.copy(tempHp = txt.toIntOrNull() ?: 0))
                     }
                 },
                 label = { Text("Temp HP") },
@@ -703,10 +1041,18 @@ private fun CharacterEditSection(
                     imeAction = ImeAction.Done
                 ),
                 keyboardActions = KeyboardActions(
-                    onDone = { focusManager.clearFocus() }
+                    onDone = {
+                        commitStats()
+                        focusManager.clearFocus()
+                    }
                 )
             )
         }
+        Text(
+            text = "Dejá HP actual o máximo vacío para mostrar “?”",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
 
         Surface(
             shape = RoundedCornerShape(18.dp),
@@ -722,9 +1068,10 @@ private fun CharacterEditSection(
                     fontWeight = FontWeight.SemiBold
                 )
 
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     TextButton(onClick = launchCameraWithPermission) {
                         Text("📸 Tomar foto")
@@ -738,6 +1085,10 @@ private fun CharacterEditSection(
                         }
                     ) {
                         Text("🖼 Galería")
+                    }
+
+                    TextButton(onClick = onOpenLibrary) {
+                        Text("🗂 Biblioteca")
                     }
 
                     if (character.imageUri != null) {
@@ -844,8 +1195,8 @@ private fun RoundPrepStatusChip(
     isEditing: Boolean,
     onRemove: () -> Unit
 ) {
-    val container = roundPrepStatusContainerColor(status)
-    val content = Color.White
+    val container = statusContainerColor(status.type)
+    val content = statusContentColor(status.type)
 
     Surface(
         shape = RoundedCornerShape(999.dp),
@@ -865,11 +1216,16 @@ private fun RoundPrepStatusChip(
             )
 
             if (isEditing) {
-                TextButton(
+                IconButton(
                     onClick = onRemove,
-                    modifier = Modifier.height(28.dp)
+                    modifier = Modifier.size(28.dp)
                 ) {
-                    Text("✕", color = content)
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Quitar estado",
+                        tint = content,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
         }
@@ -1008,15 +1364,6 @@ private fun EmptyCentered(
     }
 }
 
-private fun roundPrepStatusContainerColor(status: Status): Color {
-    return when {
-        status.concentrationGroupId != null -> Color(0xFF54606E)
-        status.type == StatusType.POSITIVE -> Color(0xFF2F6E4F)
-        status.type == StatusType.NEGATIVE -> Color(0xFF7A3E3E)
-        else -> Color(0xFF4E5D73)
-    }
-}
-
 private fun formatRoundPrepStatus(status: Status): String {
     val prefix = when (status.type) {
         StatusType.POSITIVE -> "+"
@@ -1030,11 +1377,7 @@ private fun formatRoundPrepStatus(status: Status): String {
         "$prefix ${status.name} (${status.durationRounds})"
     }
 
-    return if (status.concentrationGroupId != null) {
-        "$base • Conc."
-    } else {
-        base
-    }
+    return base
 }
 
 @Composable
@@ -1105,6 +1448,16 @@ private fun AddPreCombatStatusDialog(
     )
 }
 
+private fun safeItrFileName(name: String): String {
+    val cleaned = name
+        .ifBlank { "ronda" }
+        .trim()
+        .replace(Regex("[^a-zA-Z0-9_-]+"), "_")
+        .trim('_')
+
+    return cleaned.ifBlank { "ronda" }
+}
+
 @Composable
 private fun SavingOverlay() {
     Box(
@@ -1122,4 +1475,27 @@ private fun SavingOverlay() {
             }
         }
     }
+}
+
+private fun formatInitiative(value: Double): String {
+    val text = value.toString()
+    return if (text.endsWith(".0")) {
+        text.removeSuffix(".0")
+    } else {
+        text.trimEnd('0').trimEnd('.')
+    }
+}
+
+private fun isValidDecimalInput(value: String): Boolean {
+    if (value.isBlank()) return true
+
+    val dotCount = value.count { it == '.' }
+
+    return dotCount <= 1 && value.all { it.isDigit() || it == '.' }
+}
+
+private fun suggestedLibraryImageName(character: Character): String {
+    return character.characterName.trim()
+        .ifBlank { character.playerName.trim() }
+        .ifBlank { "Imagen" }
 }

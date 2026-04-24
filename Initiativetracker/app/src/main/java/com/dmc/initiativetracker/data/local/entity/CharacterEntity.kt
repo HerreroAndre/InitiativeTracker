@@ -14,7 +14,7 @@ data class CharacterEntity(
 
     val playerName: String,
     val characterName: String,
-    val initiative: Int,
+    val initiative: Double,
 
     val imageUri: String?,
 

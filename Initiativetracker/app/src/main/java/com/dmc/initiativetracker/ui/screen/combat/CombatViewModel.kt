@@ -62,14 +62,15 @@ class CombatViewModel(
         }.combine(_toast) { bundle, toast ->
             bundle.copy(toast = toast)
         }.map { bundle ->
-            val active = bundle.ordered.filter { it.isActive && !it.isDead }
+            val ordered = bundle.ordered.sortedByInitiativeDesc()
+            val active = ordered.filter { it.isActive && !it.isDead }
             val currentId = bundle.combatState?.currentCharacterId
-            val current = bundle.ordered.firstOrNull { it.id == currentId }
+            val current = ordered.firstOrNull { it.id == currentId }
 
             CombatUiState(
                 roundId = roundId,
                 roundCounter = bundle.combatState?.roundCounter ?: 1,
-                ordered = bundle.ordered,
+                ordered = ordered,
                 activeOrdered = active,
                 current = current,
                 statuses = bundle.statuses,
@@ -88,7 +89,7 @@ class CombatViewModel(
         val active = ordered.filter { it.isActive && !it.isDead }
         val currentState = combatRepo.state.value
 
-        if (currentState == null) {
+        if (currentState == null || currentState.roundId != roundId) {
             combatRepo.start(
                 roundId = roundId,
                 initialCharacterId = active.firstOrNull()?.id
@@ -213,6 +214,30 @@ class CombatViewModel(
                 tempHp = newTempHp
             )
         )
+    }
+
+    fun heal(character: Character, amount: Int) = viewModelScope.launch {
+        if (amount <= 0) return@launch
+
+        val newCurrentHp = when {
+            character.currentHp == null -> null
+            character.maxHp != null -> (character.currentHp + amount).coerceIn(0, character.maxHp)
+            else -> (character.currentHp + amount).coerceAtLeast(0)
+        }
+
+        val revived = newCurrentHp != null && newCurrentHp > 0
+
+        repo.upsertCharacter(
+            character.copy(
+                currentHp = newCurrentHp,
+                deathSuccesses = if (revived) 0 else character.deathSuccesses,
+                deathFailures = if (revived) 0 else character.deathFailures,
+                isDead = if (revived) false else character.isDead,
+                isActive = if (revived) true else character.isActive
+            )
+        )
+
+        repairCurrentCharacterIfNeeded()
     }
 
     fun addStatus(

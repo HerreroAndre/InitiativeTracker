@@ -12,6 +12,8 @@ import com.dmc.initiativetracker.domain.model.RoundListItem
 import com.dmc.initiativetracker.domain.model.Status
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import com.dmc.initiativetracker.export.RoundTransfer
+import com.dmc.initiativetracker.export.toImportCharacters
 
 class RoundRepositoryImpl(
     private val roundDao: RoundDao,
@@ -55,17 +57,44 @@ class RoundRepositoryImpl(
         roundDao.rename(roundId, name.trim())
     }
 
-    override suspend fun commitCharacterDraft(roundId: Long, draft: List<Character>) {
+    override suspend fun commitCharacterDraft(
+        roundId: Long,
+        draft: List<Character>
+    ): Map<Long, Long> {
         val existingIds = characterDao.getIdsByRoundId(roundId)
-        val draftIds = draft.mapNotNull { if (it.id > 0) it.id else null }
+        val draftExistingIds = draft.mapNotNull { if (it.id > 0) it.id else null }
 
-        val removedIds = existingIds.filter { it !in draftIds }
+        val removedIds = existingIds.filter { it !in draftExistingIds }
         if (removedIds.isNotEmpty()) {
             characterDao.deleteByIds(removedIds)
         }
 
-        val entities = draft.map { it.copy(roundId = roundId).toEntity() }
-        characterDao.upsertAll(entities)
+        val existingCharacters = draft
+            .filter { it.id > 0 }
+            .map { it.copy(roundId = roundId).toEntity() }
+
+        if (existingCharacters.isNotEmpty()) {
+            characterDao.upsertAll(existingCharacters)
+        }
+
+        val tempToRealIds = mutableMapOf<Long, Long>()
+
+        draft
+            .filter { it.id < 0 }
+            .forEach { character ->
+                val realId = characterDao.insert(
+                    character
+                        .copy(
+                            id = 0,
+                            roundId = roundId
+                        )
+                        .toEntity()
+                )
+
+                tempToRealIds[character.id] = realId
+            }
+
+        return tempToRealIds
     }
 
     override suspend fun addStatus(status: Status): Long {
@@ -114,6 +143,59 @@ class RoundRepositoryImpl(
                     )
                 }
             }
+    override suspend fun importRound(
+        transfer: RoundTransfer,
+        replaceRoundId: Long?,
+        imageUrisByFileName: Map<String, String>
+    ): Long {
+        val targetRoundId = if (replaceRoundId == null) {
+            roundDao.insert(
+                RoundEntity(
+                    name = transfer.roundName.ifBlank { "Ronda importada" },
+                    createdAt = System.currentTimeMillis()
+                )
+            )
+        } else {
+            roundDao.rename(
+                id = replaceRoundId,
+                name = transfer.roundName.ifBlank { "Ronda importada" }
+            )
 
+            statusDao.deleteByRoundId(replaceRoundId)
+            characterDao.deleteByRoundId(replaceRoundId)
 
+            replaceRoundId
+        }
+
+        val importCharacters = transfer.toImportCharacters(
+            roundId = targetRoundId,
+            imageUriForFileName = { fileName ->
+                fileName?.let { imageUrisByFileName[it] }
+            }
+        )
+
+        importCharacters.forEach { item ->
+            val realCharacterId = characterDao.insert(
+                item.character
+                    .copy(
+                        id = 0,
+                        roundId = targetRoundId
+                    )
+                    .toEntity()
+            )
+
+            item.statuses.forEach { status ->
+                statusDao.insert(
+                    status
+                        .copy(
+                            id = 0,
+                            characterId = realCharacterId
+                        )
+                        .toEntity()
+                )
+            }
+        }
+
+        return targetRoundId
+    }
 }

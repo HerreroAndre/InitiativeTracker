@@ -26,7 +26,8 @@ class RoundPrepViewModel(
     private val sortOption = MutableStateFlow(sortPreferences.getRoundPrepSort())
     private val isSortMenuOpen = MutableStateFlow(false)
     private val confirmRemoveStatusId = MutableStateFlow<Long?>(null)
-
+    private val tempStatuses = MutableStateFlow<List<Status>>(emptyList())
+    private val pendingRemovedStatusIds = MutableStateFlow<Set<Long>>(emptySet())
     private val roundNameFlow = repo.observeRoundName(roundId)
     private val charactersFlow = repo.observeCharacters(roundId)
     private val statusesFlow = repo.observeStatuses(roundId)
@@ -42,7 +43,9 @@ class RoundPrepViewModel(
             toast,
             sortOption,
             isSortMenuOpen,
-            confirmRemoveStatusId
+            confirmRemoveStatusId,
+            tempStatuses,
+            pendingRemovedStatusIds
         ) { arr ->
             val roundName = arr[0] as String
             val characters = arr[1] as List<Character>
@@ -54,9 +57,11 @@ class RoundPrepViewModel(
             val selectedSort = arr[7] as RoundPrepSortOption
             val sortMenuOpen = arr[8] as Boolean
             val pendingRemoveStatusId = arr[9] as Long?
+            val temporaryStatuses = arr[10] as List<Status>
+            val removedStatusIds = arr[11] as Set<Long>
 
             val safeCharacters = sortCharacters(characters, selectedSort)
-            val safeDraft = sortCharacters(draftList, selectedSort)
+            val safeDraft = draftList
 
             RoundPrepUiState(
                 roundId = roundId,
@@ -64,7 +69,11 @@ class RoundPrepViewModel(
                 isEditing = editing,
                 characters = safeCharacters,
                 draft = safeDraft,
-                statuses = statuses,
+                statuses = if (editing) {
+                    statuses.filterNot { it.id in removedStatusIds } + temporaryStatuses
+                } else {
+                    statuses
+                },
                 sortOption = selectedSort,
                 isSortMenuOpen = sortMenuOpen,
                 confirmRemoveStatusId = pendingRemoveStatusId,
@@ -106,6 +115,8 @@ class RoundPrepViewModel(
         isEditing.value = true
         error.value = null
         confirmRemoveStatusId.value = null
+        tempStatuses.value = emptyList()
+        pendingRemovedStatusIds.value = emptySet()
     }
 
     fun cancelEdit() {
@@ -113,6 +124,8 @@ class RoundPrepViewModel(
         draft.value = emptyList()
         error.value = null
         confirmRemoveStatusId.value = null
+        tempStatuses.value = emptyList()
+        pendingRemovedStatusIds.value = emptySet()
     }
 
     fun addCharacterToDraft() {
@@ -122,7 +135,7 @@ class RoundPrepViewModel(
             roundId = roundId,
             playerName = "",
             characterName = "",
-            initiative = 10,
+            initiative = 10.0,
             imageUri = null,
             currentHp = null,
             maxHp = null,
@@ -145,6 +158,12 @@ class RoundPrepViewModel(
     fun removeDraftCharacter(characterId: Long) {
         error.value = null
         draft.update { it.filterNot { c -> c.id == characterId } }
+
+        if (characterId < 0) {
+            tempStatuses.update { list ->
+                list.filterNot { it.characterId == characterId }
+            }
+        }
     }
 
     fun confirmEdit() {
@@ -157,10 +176,10 @@ class RoundPrepViewModel(
 
                 val normalizedDraft = draft.value
                     .map { c ->
-                        val normalizedId = if (c.id < 0) 0 else c.id
+                        val normalizedId = c.id
                         val normalizedPlayerName = c.playerName.trim()
                         val normalizedCharacterName = c.characterName.trim()
-                        val normalizedInitiative = if (c.initiative <= 0) 1 else c.initiative
+                        val normalizedInitiative = if (c.initiative <= 0) 1.0 else c.initiative
                         val normalizedMaxHp = c.maxHp?.coerceAtLeast(0)
                         val normalizedTempHp = c.tempHp.coerceAtLeast(0)
 
@@ -170,6 +189,8 @@ class RoundPrepViewModel(
                             else -> c.currentHp.coerceAtLeast(0)
                         }
 
+                        val revived = normalizedCurrentHp != null && normalizedCurrentHp > 0
+
                         c.copy(
                             id = normalizedId,
                             playerName = normalizedPlayerName,
@@ -177,16 +198,47 @@ class RoundPrepViewModel(
                             initiative = normalizedInitiative,
                             currentHp = normalizedCurrentHp,
                             maxHp = normalizedMaxHp,
-                            tempHp = normalizedTempHp
+                            tempHp = normalizedTempHp,
+                            deathSuccesses = if (revived) 0 else c.deathSuccesses,
+                            deathFailures = if (revived) 0 else c.deathFailures,
+                            isDead = if (revived) false else c.isDead,
+                            isActive = if (revived) true else c.isActive
                         )
                     }
-                    .sortedByDescending { it.initiative }
+                val tempIdToRealId = repo.commitCharacterDraft(roundId, normalizedDraft)
 
-                repo.commitCharacterDraft(roundId, normalizedDraft)
+                pendingRemovedStatusIds.value.forEach { statusId ->
+                    repo.removeStatus(statusId)
+                }
+
+                val keptExistingCharacterIds = normalizedDraft
+                    .mapNotNull { if (it.id > 0) it.id else null }
+                    .toSet()
+
+                val statusesToInsert = tempStatuses.value.mapNotNull { status ->
+                    val realCharacterId = if (status.characterId < 0) {
+                        tempIdToRealId[status.characterId]
+                    } else {
+                        status.characterId.takeIf { it in keptExistingCharacterIds }
+                    }
+
+                    realCharacterId?.let {
+                        status.copy(
+                            id = 0,
+                            characterId = it
+                        )
+                    }
+                }
+
+                statusesToInsert.forEach { status ->
+                    repo.addStatus(status)
+                }
 
                 isEditing.value = false
                 draft.value = emptyList()
                 confirmRemoveStatusId.value = null
+                tempStatuses.value = emptyList()
+                pendingRemovedStatusIds.value = emptySet()
                 toast.value = "Ronda guardada"
             } catch (t: Throwable) {
                 error.value = t.message ?: "Error guardando"
@@ -231,18 +283,19 @@ class RoundPrepViewModel(
             return@launch
         }
 
-        repo.addStatus(
-            Status(
-                id = 0,
-                characterId = characterId,
-                name = cleanName,
-                type = type,
-                durationRounds = durationRounds.coerceAtLeast(1),
-                originCharacterId = null,
-                originLabel = null,
-                concentrationGroupId = null
-            )
+
+        val status = Status(
+            id = -System.nanoTime(),
+            characterId = characterId,
+            name = cleanName,
+            type = type,
+            durationRounds = durationRounds.coerceAtLeast(1),
+            originCharacterId = null,
+            originLabel = null,
+            concentrationGroupId = null
         )
+
+        tempStatuses.update { it + status }
 
         toast.value = "Estado agregado"
     }
@@ -268,7 +321,16 @@ class RoundPrepViewModel(
             return@launch
         }
 
-        repo.removeStatus(statusId)
+        if (statusId < 0) {
+            tempStatuses.update { list ->
+                list.filterNot { it.id == statusId }
+            }
+        } else {
+            pendingRemovedStatusIds.update { ids ->
+                ids + statusId
+            }
+        }
+
         confirmRemoveStatusId.value = null
         toast.value = "Estado eliminado"
     }

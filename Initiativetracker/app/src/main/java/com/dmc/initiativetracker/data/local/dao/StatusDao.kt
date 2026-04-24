@@ -52,4 +52,12 @@ interface StatusDao {
         WHERE durationRounds > 0
     """)
     suspend fun decrementAllRoundDurations()
+
+    @Query("""
+    DELETE FROM statuses
+    WHERE characterId IN (
+        SELECT id FROM characters WHERE roundId = :roundId
+    )
+""")
+    suspend fun deleteByRoundId(roundId: Long)
 }
