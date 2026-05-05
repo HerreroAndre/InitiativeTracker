@@ -2,14 +2,14 @@
 
 **Language / Idioma:** [English](README.md) · [Español](README_ES.md)
 
-> Android app for tracking combat initiative in tabletop RPGs, focused on **fast turn management**, **visual character identification**, and **local persistence**.
+> A native Android initiative tracker for tabletop RPG combat, built with Kotlin, Jetpack Compose, Room, and MVVM. Designed for fast turn management, visual character recognition, and fully local persistence.
 
 ![Platform](https://img.shields.io/badge/Platform-Android-green)
 ![Language](https://img.shields.io/badge/Language-Kotlin-purple)
 ![UI](https://img.shields.io/badge/UI-Jetpack%20Compose-blue)
 ![Architecture](https://img.shields.io/badge/Architecture-MVVM-orange)
 ![Database](https://img.shields.io/badge/Persistence-Room-red)
-![Status](https://img.shields.io/badge/Status-Active%20Development-brightgreen)
+![Status](https://img.shields.io/badge/Status-Stable%20MVP-blue)
 
 ---
 
@@ -32,7 +32,7 @@ The project is built around a clear goal: make initiative tracking **fast, visua
 
 ## Features
 
-### Current
+### Implemented
 - Create, load, and delete rounds
 - Add, edit, and remove characters
 - Save data locally with Room
@@ -42,16 +42,10 @@ The project is built around a clear goal: make initiative tracking **fast, visua
 - Character portraits for quick recognition
 - Active / inactive character handling
 - Optional HP tracking
-- Theme settings: light, dark, or system
-
-### Planned
-- Improved combat UI polish
-- Better bottom sheet combat list
-- Full-screen image preview
-- Conditions / buffs / debuffs
-- Concentration and duration tracking
-- More combat edge-case handling
-- Round export/import code for sharing between devices
+- Light, dark, and system theme support
+- Combat list with character overview
+- Full-screen character image preview
+- Basic condition / status tracking
 
 ---
 
