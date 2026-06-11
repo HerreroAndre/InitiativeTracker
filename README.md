@@ -73,7 +73,6 @@ This project was built to practice and apply modern Android development concepts
 - **Local persistence with Room**
 - **Entity-to-domain model mapping**
 - **Reactive UI with Flow / StateFlow**
-- **Unidirectional state handling**
 - **Compose navigation**
 - **UI state modeling**
 - **Separation of concerns**
@@ -104,22 +103,6 @@ The app was planned around a few core product and UX priorities:
 - **Low-friction combat flow**
 - **Offline/local usability**
 - **Simple and maintainable architecture**
-
----
-
-## Installation
-
-To run the project locally:
-
-1. Clone the repository
-2. Open it in Android Studio
-3. Sync Gradle
-4. Run it on an emulator or Android device
-
-```bash
-git clone https://github.com/HerreroAndre/InitiativeTracker.git
-
-```
 
 ---
 
