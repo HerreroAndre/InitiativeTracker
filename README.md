@@ -31,12 +31,9 @@ The project is built around a clear goal: make initiative tracking **fast, visua
 ---
 
 ## Features
-
-### Implemented
 - Create, load, and delete rounds
 - Add, edit, and remove characters
 - Save data locally with Room
-- Track initiative from highest to lowest
 - Navigate turns forward and backward in a loop
 - Round counter during combat
 - Character portraits for quick recognition
@@ -44,8 +41,8 @@ The project is built around a clear goal: make initiative tracking **fast, visua
 - Optional HP tracking
 - Light, dark, and system theme support
 - Combat list with character overview
-- Full-screen character image preview
 - Basic condition / status tracking
+- System of exportation/importation of rounds through a sharable code
 
 ---
 
@@ -74,8 +71,6 @@ This project was built to practice and apply modern Android development concepts
 - **Entity-to-domain model mapping**
 - **Reactive UI with Flow / StateFlow**
 - **Compose navigation**
-- **UI state modeling**
-- **Separation of concerns**
 - **Scalable folder organization**
 
 ---
